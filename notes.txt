@@ -1,0 +1,5 @@
+Links:
+- https://emudev.org/getting_started
+- https://archive.org/download/MAME0.37b5_MAME2000_Reference_Set_Update_2_ROMs_Samples/roms/
+- https://github.com/kpmiller/emulator101
+
