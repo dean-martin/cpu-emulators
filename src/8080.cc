@@ -97,17 +97,20 @@ int Disassemble8080Op(unsigned char *codebuffer, int pc)
         case 0x21: printf("LXI H, #$%02x%02x", code[2], code[1]); opbytes = 3; break;    
 	case 0x32: printf("STA ($%02x%02x)", code[2], code[1]); opbytes = 3; break;
 	case 0x35: printf("DCR M"); break;
+	case 0x3a: printf("LDA ($%02x02x)", code[2], code[1]); opbytes = 3; break;
 	case 0x3e: printf("MVI %c, #$%02x", 'A', code[1]); opbytes = 2; break;
+	case 0xa7: printf("ANA A"); break;
 	case 0xc3: printf("JMP #$%02x%02x", code[2], code[1]); opbytes = 3; break;
-	case 0xc5: printf("PUSH B"); break; // Push register Pair B & C on stack. 11 cycles.
-	case 0xcd: printf("CALL #$%02x%02x", code[2], code[1]); opbytes = 3; break; // Push register Pair B & C on stack. 11 cycles.
-	case 0xd5: printf("PUSH D"); break; // Push register Pair D & E on stack.
+	case 0xc5: printf("PUSH B"); break; 
+	case 0xc6: printf("ADI #$%02x", code[1]); opbytes = 2; break; 
+	case 0xca: printf("JZ #$%02x%02x", code[2], code[1]); opbytes = 3; break;
+	case 0xcd: printf("CALL #$%02x%02x", code[2], code[1]); opbytes = 3; break;
+	case 0xd5: printf("PUSH D"); break;
 	case 0xda: printf("JC #$%02x%02x", code[2], code[1]); opbytes = 3; break;
-	case 0xdb: printf("IN #$%02x", code[1]); opbytes = 2; break; // Input
-	case 0xe5: printf("PUSH H"); break; // Push register Pair H & L on stack.
-	case 0xf5: printf("PUSH PSW"); break; // Push (A) and Flags on stack. 11 cycles.
-	
-
+	case 0xdb: printf("IN #$%02x", code[1]); opbytes = 2; break;
+	case 0xe5: printf("PUSH H"); break;
+	case 0xf5: printf("PUSH PSW"); break;
+	case 0xfe: printf("CPI #$%02x", code[1]); opbytes = 2; break;
 
 	default: printf("__TODO__ Opcode: 0x%02x %sb", *code, ByteToBinary(*code)); break;
     }
