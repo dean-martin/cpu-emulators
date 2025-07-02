@@ -9,24 +9,25 @@ typedef struct ConditionCodes {
 	uint8_t p:1;
 	uint8_t cy:1;
 	uint8_t ac:1;
-	uint8_t pad:3; // padding to align to 8bit boundary? should review K&R. thought it auto happens, and not critical here.
+	uint8_t pad:3; // padding to align to 8bit boundary? should review K&R. thought it auto happens, and not critical here too.
 } ConditionCodes;
 
 typedef struct State8080 {
-    uint8_t	a;
-    uint8_t	b;
-    uint8_t	c;
-    uint8_t	d;
-    uint8_t	e;
-    uint8_t	h;
-    uint8_t	l;
-    uint16_t sp;
-    uint16_t pc;
-    uint8_t *memory;
+    u8	a;
+    u8	b;
+    u8	c;
+    u8	d;
+    u8	e;
+    u8	h;
+    u8	l;
+    u16 sp;
+    u16 pc;
+    u8 *memory;
     ConditionCodes cc;
-    uint8_t int_enable;
+    u8 int_enable;
 
     u8 data_at_memory();
+
 } State8080;
 
 // "Memory" register pair H & L.
@@ -103,12 +104,19 @@ process_flags(State8080 *state, u16 answer)
     state->cc.s = ((answer & 0x80) != 0); // 0x80 is the 7th bit.
     state->cc.cy = (answer > 0xff);
     state->cc.p = Parity(answer&0xff);
-    // TODO: use?
-    // state->a = answer & 0xff;
+}
+
+// process condition flags, no carry (NC)
+inline void
+process_flags_nc(State8080 *state, u16 answer)
+{
+    state->cc.z = ((answer & 0xff) == 0);
+    state->cc.s = ((answer & 0x80) != 0); // 0x80 is the 7th bit.
+    state->cc.p = Parity(answer&0xff);
 }
 
 inline void
-emu_add(State8080 *state, u8 num)
+ADD(State8080 *state, u8 num)
 {
     u16 answer = (u16) state->a + (u16) num;
     process_flags(state, answer);
@@ -116,7 +124,7 @@ emu_add(State8080 *state, u8 num)
 }
 
 inline void
-emu_add_wcarry(State8080 *state, u8 num)
+ADC(State8080 *state, u8 num)
 {
     u16 answer = (u16) state->a + (u16) num + (u16) state->cc.cy;
     process_flags(state, answer);
@@ -124,7 +132,15 @@ emu_add_wcarry(State8080 *state, u8 num)
 }
 
 inline void
-emu_sub(State8080 *state, u8 num)
+ACI(State8080 *state, u8 word)
+{
+    u16 answer = (u16) state->a + (u16) word + (u16) state->cc.cy;
+    process_flags(state, answer);
+    state->a = answer & 0xff;
+}
+
+inline void
+SUB(State8080 *state, u8 num)
 {
     u16 answer = (u16) state->a - (u16) num;
     process_flags(state, answer);
@@ -132,8 +148,42 @@ emu_sub(State8080 *state, u8 num)
 }
 
 inline void
-emu_sbb(State8080 *state, u8 num)
+SBB(State8080 *state, u8 word)
 {
+    u16 answer = (u16) state->a - (u16) word - (u16) state->cc.cy;
+    process_flags(state, answer);
+    state->a = answer & 0xff;
+}
+
+inline void INR_M(State8080 *state)
+{
+    u16 offset = (state->h<<8) | state->l;
+    state->memory[offset]++;
+    process_flags_nc(state, state->memory[offset]);
+}
+
+inline void DCR_M(State8080 *state)
+{
+    u16 offset = (state->h<<8) | state->l;
+    state->memory[offset]--;
+    process_flags_nc(state, state->memory[offset]);
+}
+
+// @TODO: test lol
+inline void INX_RP(u8 *rh, u8 *rl)
+{
+    u16 pair = (((u16) *rh) << 8) | (u16) *rl;
+    pair++;
+    *rh = pair & 0xFF;
+    *rl = (pair >> 8) & 0xFF;
+}
+
+inline void DCX_RP(u8 *rh, u8 rl)
+{
+    u16 pair = (((u16) *rh) << 8) | (u16) *rl;
+    pair--;
+    *rh = pair & 0xFF;
+    *rl = (pair >> 8) & 0xFF;
 }
 
 int Emulate8080Op(State8080 *state)
@@ -149,41 +199,69 @@ int Emulate8080Op(State8080 *state)
 	    state->pc += 2;
 	} break;
         case 0x02: UnimplementedInstruction(state); break;
-        case 0x03: UnimplementedInstruction(state); break;
-        case 0x04: UnimplementedInstruction(state); break;
+        case 0x03: INX_RP(&state->b, &state->c); break;	// INX B
+        case 0x04: process_flags_nc(state, ++state->b); break;	// INR B
+        case 0x05: process_flags_nc(state, --state->b); break;	// DCR B
+        case 0x0B: DCX_RP(state->b, state->c); break;	// DCX B
+        case 0x0c: process_flags_nc(state, ++state->c); break;	// INR C
+        case 0x0d: process_flags_nc(state, --state->c); break;	// DCR C
+        case 0x13: INX_RP(&state->d, &state->e); break;	// INX D
+        case 0x14: process_flags_nc(state, ++state->d); break;	// INR D
+        case 0x15: process_flags_nc(state, --state->d); break;	// DCR D
+        case 0x1B: DCX_RP(state->d, state->e); break;	// DCX D
+        case 0x1c: process_flags_nc(state, ++state->e); break;	// INR E
+        case 0x1d: process_flags_nc(state, --state->e); break;	// DCR E
+        case 0x23: INX_RP(&state->h, &state->l); break;	// INX H
+        case 0x24: process_flags_nc(state, ++state->h); break;	// INR H
+        case 0x25: process_flags_nc(state, --state->h); break;	// DCR H
+        case 0x2B: DCX_RP(state->h, state->l); break;	// DCX H
+        case 0x2c: process_flags_nc(state, ++state->l); break;	// INR L
+        case 0x2d: process_flags_nc(state, --state->l); break;	// DCR L
+        case 0x33: ++state->sp; break;	// INX SP
+        case 0x34: INR_M(state); break;	// INR M
+	case 0x35: DCR_M(state); break;	// DCR L
+        case 0x3B: --state->sp; break;	// DCX SP
+        case 0x3c: process_flags_nc(state, ++state->a);break;	// INR A
+	case 0x3d: process_flags_nc(state, --state->a); break;	// DCR A
 	case 0x41: state->b = state->c; break;	// MOV B,C
 	case 0x42: state->b = state->d; break;	// MOV B,D
 	case 0x43: state->b = state->e; break;	// MOV B,E
-	case 0x80: emu_add(state, state->b); break; // ADD B
-	case 0x81: emu_add(state, state->c); break; // ADD C
-	case 0x82: emu_add(state, state->d); break; // ADD D
-	case 0x83: emu_add(state, state->e); break; // ADD E
-	case 0x84: emu_add(state, state->h); break; // ADD H
-	case 0x85: emu_add(state, state->l); break; // ADD L
-	case 0x86: // ADD M
-	{
-	    u16 offset = (state->h<<8) | (state->l);
-	    emu_add(state, state->memory[offset]);
-	} break;
-	case 0x87: emu_add(state, state->a); break; // ADD A
-	case 0x88: emu_add_wcarry(state, state->b); break; // ADC B
-	case 0x89: emu_add_wcarry(state, state->c); break; // ADC C
-	case 0x8a: emu_add_wcarry(state, state->d); break; // ADC D
-	case 0x8b: emu_add_wcarry(state, state->e); break; // ADC E
-	case 0x8c: emu_add_wcarry(state, state->h); break; // ADC H
-	case 0x8d: emu_add_wcarry(state, state->l); break; // ADC L
-	case 0x8e: emu_add_wcarry(state, state->data_at_memory()); break; // ADC M
-	case 0x8f: emu_add_wcarry(state, state->a); break; // ADC A
-	case 0x90: emu_sub(state, state->a); break; // SUB B
-	case 0x91: emu_sub(state, state->c); break; // SUB C
-	case 0x92: emu_sub(state, state->d); break; // SUB D
-	case 0x93: emu_sub(state, state->e); break; // SUB E
-	case 0x94: emu_sub(state, state->h); break; // SUB H
-	case 0x95: emu_sub(state, state->l); break; // SUB L
-	case 0x96: emu_sub(state, state->data_at_memory()); break; // SUB M
-	case 0x97: emu_sub(state, state->a); break; // SUB A
-	case 0x98: emu_sub(state, state->a); break; // SUB A
-	case 0xC6: emu_add_wcarry(state, opcode[1]); break; // ADI byte
+	case 0x80: ADD(state, state->b); break; // ADD B
+	case 0x81: ADD(state, state->c); break; // ADD C
+	case 0x82: ADD(state, state->d); break; // ADD D
+	case 0x83: ADD(state, state->e); break; // ADD E
+	case 0x84: ADD(state, state->h); break; // ADD H
+	case 0x85: ADD(state, state->l); break; // ADD L
+	case 0x86: ADD(state, state->data_at_memory()); break; // ADD M
+	case 0x87: ADD(state, state->a); break; // ADD A
+	case 0x88: ADC(state, state->b); break; // ADC B
+	case 0x89: ADC(state, state->c); break; // ADC C
+	case 0x8a: ADC(state, state->d); break; // ADC D
+	case 0x8b: ADC(state, state->e); break; // ADC E
+	case 0x8c: ADC(state, state->h); break; // ADC H
+	case 0x8d: ADC(state, state->l); break; // ADC L
+	case 0x8e: ADC(state, state->data_at_memory()); break; // ADC M
+	case 0x8f: ADC(state, state->a); break; // ADC A
+	case 0x90: SUB(state, state->a); break; // SUB B
+	case 0x91: SUB(state, state->c); break; // SUB C
+	case 0x92: SUB(state, state->d); break; // SUB D
+	case 0x93: SUB(state, state->e); break; // SUB E
+	case 0x94: SUB(state, state->h); break; // SUB H
+	case 0x95: SUB(state, state->l); break; // SUB L
+	case 0x96: SUB(state, state->data_at_memory()); break; // SUB M
+	case 0x97: SUB(state, state->a); break; // SUB A
+	case 0x98: SBB(state, state->b); break; // SBB A
+	case 0x99: SBB(state, state->c); break; // SBB C
+	case 0x9a: SBB(state, state->d); break; // SBB D
+	case 0x9b: SBB(state, state->e); break; // SBB E
+	case 0x9c: SBB(state, state->h); break; // SBB H
+	case 0x9d: SBB(state, state->l); break; // SBB L
+	case 0x9e: SBB(state, state->data_at_memory()); break; // SBB M
+	case 0x9f: SBB(state, state->a); break; // SBB A
+	case 0xC6: ADC(state, opcode[1]); break; // ADI word
+	case 0xCE: ACI(state, opcode[1]); break; // ACI word
+	case 0xD6: SUB(state, opcode[1]); break; // SUI word
+	case 0xDE: SBB(state, opcode[1]); break; // SBI word
 	// . . .
         case 0xfe: UnimplementedInstruction(state); break;
         case 0xff: UnimplementedInstruction(state); break;
