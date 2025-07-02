@@ -158,14 +158,14 @@ SBB(State8080 *state, u8 word)
 inline void INR_M(State8080 *state)
 {
     u16 offset = (state->h<<8) | state->l;
-    state->memory[offset]++;
+    ++state->memory[offset];
     process_flags_nc(state, state->memory[offset]);
 }
 
 inline void DCR_M(State8080 *state)
 {
     u16 offset = (state->h<<8) | state->l;
-    state->memory[offset]--;
+    --state->memory[offset];
     process_flags_nc(state, state->memory[offset]);
 }
 
@@ -178,12 +178,55 @@ inline void INX_RP(u8 *rh, u8 *rl)
     *rl = (pair >> 8) & 0xFF;
 }
 
-inline void DCX_RP(u8 *rh, u8 rl)
+// @TODO: test
+inline void DCX_RP(u8 *rh, u8 *rl)
 {
     u16 pair = (((u16) *rh) << 8) | (u16) *rl;
     pair--;
     *rh = pair & 0xFF;
     *rl = (pair >> 8) & 0xFF;
+}
+
+// @TODO: test
+inline void DAD_RP(State8080 *state, u8 rh, u8 rl)
+{
+    u16 hl = ((u16)state->h << 8) | (u16) state->l;
+    u16 bc = ((u16)rh << 8) | (u16) rl;
+    hl += bc;
+    state->cc.cy = (hl > 0xff);
+    state->l = (hl & 0xFF);
+    state->h = (hl>>8) & 0xFF;
+}
+
+inline void DAA(State8080 *state)
+{
+/*
+
+    The eight-bit number in the accumulator is adjusted
+    to form two four-bit Binary-Coded-Decimal digits by
+    the following process:
+	1. If the value of the least significant 4 bits of the
+	accumulator is greater than 9 or if the AC flag
+	is set, 6 is added to the accumulator.
+	2. If the value of the most significant 4 bits of the
+	accumulator is now greater than 9, or if the CY
+	flag is set, 6 is added to the most significant 4
+	bits of the accumulator.
+
+    NOTE: All flags are affected
+ */
+    // @TODO: review: does this even make sense
+    u8 lsb = (state->a & 0xFF);
+    if (lsb > 9) {
+	state->a += 6;
+    }
+    u8 msb = ((state->a >> 8) & 0xFF);
+    if (msb > 9 || state->cc.cy) {
+	msb += 6;
+	state->a = (msb << 8) | (state->a & 0xFF);
+    }
+
+    process_flags(state, state->a);
 }
 
 int Emulate8080Op(State8080 *state)
@@ -202,24 +245,36 @@ int Emulate8080Op(State8080 *state)
         case 0x03: INX_RP(&state->b, &state->c); break;	// INX B
         case 0x04: process_flags_nc(state, ++state->b); break;	// INR B
         case 0x05: process_flags_nc(state, --state->b); break;	// DCR B
-        case 0x0B: DCX_RP(state->b, state->c); break;	// DCX B
+
+        case 0x09: DAD_RP(state, state->b, state->c); break;	// DAD B
+        case 0x0B: DCX_RP(&state->b, &state->c); break;	// DCX B
         case 0x0c: process_flags_nc(state, ++state->c); break;	// INR C
         case 0x0d: process_flags_nc(state, --state->c); break;	// DCR C
+
         case 0x13: INX_RP(&state->d, &state->e); break;	// INX D
         case 0x14: process_flags_nc(state, ++state->d); break;	// INR D
         case 0x15: process_flags_nc(state, --state->d); break;	// DCR D
-        case 0x1B: DCX_RP(state->d, state->e); break;	// DCX D
+
+        case 0x19: DAD_RP(state, state->d, state->e); break;	// DAD D
+        case 0x1B: DCX_RP(&state->d, &state->e); break;	// DCX D
         case 0x1c: process_flags_nc(state, ++state->e); break;	// INR E
         case 0x1d: process_flags_nc(state, --state->e); break;	// DCR E
+
         case 0x23: INX_RP(&state->h, &state->l); break;	// INX H
         case 0x24: process_flags_nc(state, ++state->h); break;	// INR H
         case 0x25: process_flags_nc(state, --state->h); break;	// DCR H
-        case 0x2B: DCX_RP(state->h, state->l); break;	// DCX H
+        case 0x27: DAA(state); break;	// DAA
+
+        case 0x29: DAD_RP(state, state->h, state->l); break;	// DAD H
+        case 0x2B: DCX_RP(&state->h, &state->l); break;	// DCX H
         case 0x2c: process_flags_nc(state, ++state->l); break;	// INR L
         case 0x2d: process_flags_nc(state, --state->l); break;	// DCR L
+
         case 0x33: ++state->sp; break;	// INX SP
         case 0x34: INR_M(state); break;	// INR M
 	case 0x35: DCR_M(state); break;	// DCR L
+
+        case 0x39: DAD_RP(state, state->sp>>8, (state->sp & 0xFF)); break;	// DAD SP
         case 0x3B: --state->sp; break;	// DCX SP
         case 0x3c: process_flags_nc(state, ++state->a);break;	// INR A
 	case 0x3d: process_flags_nc(state, --state->a); break;	// DCR A
