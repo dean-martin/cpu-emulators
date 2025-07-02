@@ -1,6 +1,6 @@
 @echo off
 
-cl -nologo src/8080.cc && 8080.exe rom\invaders.h 
+cl -nologo src/8080.cc && 8080.exe rom\invaders
 
 REM IF NOT EXIST build mkdir build
 REM pushd build

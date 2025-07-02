@@ -3,6 +3,41 @@
 #include <stdlib.h>
 #include <assert.h>
 
+typedef struct ConditionCodes {
+	uint8_t z:1;
+	uint8_t s:1;
+	uint8_t p:1;
+	uint8_t cy:1;
+	uint8_t ac:1;
+	uint8_t pad:3; // padding to align to 8bit boundary? should review K&R. thought it auto happens, and not critical here.
+} ConditionCodes;
+
+typedef struct State8080 {
+    uint8_t	a;
+    uint8_t	b;
+    uint8_t	c;
+    uint8_t	d;
+    uint8_t	e;
+    uint8_t	h;
+    uint8_t	l;
+    uint16_t sp;
+    uint16_t pc;
+    uint8_t *memory;
+    ConditionCodes cc;
+    uint8_t int_enable;
+
+    u8 data_at_memory();
+} State8080;
+
+// "Memory" register pair H & L.
+// Gets the word at the address location ((H) (L))
+u8 State8080::data_at_memory() 
+{
+    // @todo: review the h<<8 as a u8 works without a precast to u16.
+    u16 offset = (h<<8) | l;
+    return memory[offset];
+}
+
 char *ByteToBinary(unsigned char num);
 int Disassemble8080Op(unsigned char *buffer, int pc);
 int ParseInt(char *str);
@@ -32,11 +67,10 @@ int main(int argc, char **argv)
 
     int pc = 0;
 
-    int maxops = 1000;
+    int maxops = 10000;
     if (argc > 2)
 	maxops = ParseInt(argv[2]);
 
-    printf("addr|opcode\n");
     while (pc < fsize && pc < maxops) {
 	int ops = Disassemble8080Op(buffer, pc);
 	if (ops > 1)
@@ -44,8 +78,117 @@ int main(int argc, char **argv)
 	pc += ops;
     }
 
-    printf("remaining: %d\n", GlobalRemaining);
+    //printf("remaining: %d\n", GlobalRemaining);
 
+    return 0;
+}
+
+void UnimplementedInstruction(State8080 *state)
+{
+    // pc will have advanced one, so undo that
+    fprintf(stderr, "Error: unimplemented instruction\n");
+    exit(1);
+}
+
+// TODO: what
+u8 Parity(u8 ans)
+{
+    return 0;
+}
+
+inline void
+process_flags(State8080 *state, u16 answer)
+{
+    state->cc.z = ((answer & 0xff) == 0);
+    state->cc.s = ((answer & 0x80) != 0); // 0x80 is the 7th bit.
+    state->cc.cy = (answer > 0xff);
+    state->cc.p = Parity(answer&0xff);
+    // TODO: use?
+    // state->a = answer & 0xff;
+}
+
+inline void
+emu_add(State8080 *state, u8 num)
+{
+    u16 answer = (u16) state->a + (u16) num;
+    process_flags(state, answer);
+    state->a = answer & 0xff;
+}
+
+inline void
+emu_add_wcarry(State8080 *state, u8 num)
+{
+    u16 answer = (u16) state->a + (u16) num + (u16) state->cc.cy;
+    process_flags(state, answer);
+    state->a = answer & 0xff;
+}
+
+inline void
+emu_sub(State8080 *state, u8 num)
+{
+    u16 answer = (u16) state->a - (u16) num;
+    process_flags(state, answer);
+    state->a = answer & 0xff;
+}
+
+inline void
+emu_ssb(State8080 *state, u8 num)
+{
+}
+
+int Emulate8080Op(State8080 *state)
+{
+    unsigned char *opcode = &state->memory[state->pc];
+
+    switch(*opcode)
+    {
+        case 0x00: break;   // NOP is easy!
+        case 0x01: {	    // LXI  B,word
+	    state->c = opcode[1];
+	    state->b = opcode[2];
+	    state->pc += 2;
+	} break;
+        case 0x02: UnimplementedInstruction(state); break;    
+        case 0x03: UnimplementedInstruction(state); break;    
+        case 0x04: UnimplementedInstruction(state); break; 
+	case 0x41: state->b = state->c; break;	// MOV B,C
+	case 0x42: state->b = state->d; break;	// MOV B,D
+	case 0x43: state->b = state->e; break;	// MOV B,E
+	case 0x80: emu_add(state, state->b); break; // ADD B
+	case 0x81: emu_add(state, state->c); break; // ADD C
+	case 0x82: emu_add(state, state->d); break; // ADD D
+	case 0x83: emu_add(state, state->e); break; // ADD E
+	case 0x84: emu_add(state, state->h); break; // ADD H
+	case 0x85: emu_add(state, state->l); break; // ADD L
+	case 0x86: // ADD M
+	{
+	    u16 offset = (state->h<<8) | (state->l);
+	    emu_add(state, state->memory[offset]);
+	} break;
+	case 0x87: emu_add(state, state->a); break; // ADD A
+	case 0x88: emu_add_wcarry(state, state->b); break; // ADC B
+	case 0x89: emu_add_wcarry(state, state->c); break; // ADC C
+	case 0x8a: emu_add_wcarry(state, state->d); break; // ADC D
+	case 0x8b: emu_add_wcarry(state, state->e); break; // ADC E
+	case 0x8c: emu_add_wcarry(state, state->h); break; // ADC H
+	case 0x8d: emu_add_wcarry(state, state->l); break; // ADC L
+	case 0x8e: emu_add_wcarry(state, state->data_at_memory()); break; // ADC M
+	case 0x8f: emu_add_wcarry(state, state->a); break; // ADC A
+	case 0x90: emu_sub(state, state->a); break; // SUB B
+	case 0x91: emu_sub(state, state->c); break; // SUB C
+	case 0x92: emu_sub(state, state->d); break; // SUB D
+	case 0x93: emu_sub(state, state->e); break; // SUB E
+	case 0x94: emu_sub(state, state->h); break; // SUB H
+	case 0x95: emu_sub(state, state->l); break; // SUB L
+	case 0x96: emu_sub(state, state->data_at_memory()); break; // SUB M
+	case 0x97: emu_sub(state, state->a); break; // SUB A
+	case 0x98: emu_sub(state, state->a); break; // SUB A
+	case 0xC6: emu_add_wcarry(state, opcode[1]); break; // ADI byte
+	// . . .
+        case 0xfe: UnimplementedInstruction(state); break;    
+        case 0xff: UnimplementedInstruction(state); break;  
+    }
+    state->pc += 1;
     return 0;
 }
 
@@ -72,7 +215,6 @@ char *ByteToBinary(unsigned char num)
     return str;
 }
 
-
 void binprintf(unsigned x)
 {
     printf("%s\n", ByteToBinary(x));
@@ -83,9 +225,9 @@ int Disassemble8080Op(unsigned char *codebuffer, int pc)
     unsigned char *code = &codebuffer[pc];
     int opbytes = 1;
     printf("%04x ", pc);
-    printf("0x%02x ", *code);
+    //printf("0x%02x ", *code);
     char *codebin = ByteToBinary(*code);
-    printf("%sb ", codebin);
+    //printf("%sb ", codebin);
     switch (*code)
     {
 	case 0x00: printf("NOP"); break;
@@ -139,7 +281,7 @@ int Disassemble8080Op(unsigned char *codebuffer, int pc)
 	case 0x35: printf("DCR M"); break;
 	case 0x36: printf("MVI M,#$%02x", code[1]); opbytes=2; break;
 	case 0x37: printf("STC"); break;
-	case 0x3a: printf("LDA ($%02x02x)", code[2], code[1]); opbytes = 3; break;
+	case 0x3a: printf("LDA $%02x%02x", code[2], code[1]); opbytes = 3; break;
 	case 0x3c: printf("INR A"); break;
 	case 0x3d: printf("DCR A"); break;
 	case 0x3e: printf("MVI %c, #$%02x", 'A', code[1]); opbytes = 2; break;
