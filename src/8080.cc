@@ -40,13 +40,71 @@ u8 State8080::data_at_memory()
 }
 
 char *ByteToBinary(unsigned char num);
+void binprintf(unsigned x);
 int Disassemble8080Op(unsigned char *buffer, int pc);
 int ParseInt(char *str);
 
 static int GlobalRemaining;
 
+#define max(a,b) ((a > b) ? a : b)
+#define min(a, b) ((a < b) ? a : b)
+
+void p(int a);
+// bonus points for figuring out multiplication using bit shifts. :O
+// doesn't work with numbers > 10, but 1-9 just fine.
+int binmul(int a, int b)
+{
+    int max = max(a,b);
+    int min = min(a,b);
+    int maxb = max;
+    int minb = min;
+    if (a == 1 || b == 1)
+	return max;
+    while (min > 0) {
+	// @TODO: handle wrapped bits for big numbers.
+	if ((min >>= 1) > 0)
+	    max <<= 1;
+	if (min == 3)
+	    max += maxb;
+    }
+    if (minb & 1)
+	max += maxb;
+    return max;
+}
+
+void p(int a)
+{
+    char *bin = ByteToBinary(a);
+    printf("%s:%d\n", bin, a);
+    free(bin);
+}
+
+void debug(int a, int b)
+{
+    p(a);
+    p(b);
+    p(a*b);
+    int res = binmul(a, b);
+    p(res);
+    if (a*b == res)
+	printf("PASS\n");
+    else {
+	printf("FAIL\n");
+	printf("AHHHHHHHH");
+	exit(1);
+    }
+}
+
 int main(int argc, char **argv)
 {
+#if 0
+    for (int i = 1; i < 10; i++)
+	for (int j = 9; j > 0; j--)
+	    debug(i,j);
+    debug(25, 10);
+    return 0;
+#endif
+
     if (argc < 2) {
 	fprintf(stderr, "pass a rom file dummy");
 	exit(1);
@@ -264,7 +322,7 @@ RST(State8080 *state, u8 NNN)
 }
 
 inline void
-PCHL(State *state)
+PCHL(State8080 *state)
 {
     state->pc = (state->h << 8) | state->l;
 }
@@ -290,6 +348,12 @@ int Emulate8080Op(State8080 *state)
         case 0x0B: DCX_RP(&state->b, &state->c); break;	// DCX B
         case 0x0c: process_flags_nc(state, ++state->c); break;	// INR C
         case 0x0d: process_flags_nc(state, --state->c); break;	// DCR C
+	case 0x0F:  // RRC
+	{
+	    u8 x = state->a;
+	    state->a = ((x & 1) << 7) | (x >> 1);
+	    state->cc.cy = (1 == (x&1));
+	} break;
 
         case 0x13: INX_RP(&state->d, &state->e); break;	// INX D
         case 0x14: process_flags_nc(state, ++state->d); break;	// INR D
@@ -299,6 +363,12 @@ int Emulate8080Op(State8080 *state)
         case 0x1B: DCX_RP(&state->d, &state->e); break;	// DCX D
         case 0x1c: process_flags_nc(state, ++state->e); break;	// INR E
         case 0x1d: process_flags_nc(state, --state->e); break;	// DCR E
+	case 0x1F:  // RAR
+	{
+	    u8 x = state->a;
+	    state->a = (state->cc.cy << 7) | (x >> 1);
+	    state->cc.cy = ((x & 1) == 1);
+	} break;
 
         case 0x23: INX_RP(&state->h, &state->l); break;	// INX H
         case 0x24: process_flags_nc(state, ++state->h); break;	// INR H
@@ -308,7 +378,12 @@ int Emulate8080Op(State8080 *state)
         case 0x29: DAD_RP(state, state->h, state->l); break;	// DAD H
         case 0x2B: DCX_RP(&state->h, &state->l); break;	// DCX H
         case 0x2c: process_flags_nc(state, ++state->l); break;	// INR L
-        case 0x2d: process_flags_nc(state, --state->l); break;	// DCR L
+	case 0x2d: process_flags_nc(state, --state->l); break;	// DCR L
+	case 0x2F:  // CMA (not)
+	{
+		state->a = ~state->a;
+		// does not affect flags
+	} break;
 
         case 0x33: ++state->sp; break;	// INX SP
         case 0x34: INR_M(state); break;	// INR M
@@ -467,6 +542,15 @@ int Emulate8080Op(State8080 *state)
 	    else
 		state->pc += 2;
 	} break;
+	case 0xE6:  // ANI  byte
+	{
+	    u8 x = state->a & opcode[1];
+	    process_flags(state, x);
+	    state->cc.cy = (0x80 == (x & 0x80)); // i kinda like this better
+	    state->cc.cy = 0; // data book says ANI clears CY
+	    state->a = x;
+	    state->pc++; // for the data byte
+	} break;
 	case 0xE7: RST(state, 4); break; // RST 4
 	case 0xE8: // RPE
 	{
@@ -476,8 +560,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xE9: // PCHL
 	{
 	    PCHL(state);
-	    // @TODO: update return value.
-	    return 0;
+	    return 0; // @TODO: update return value.
 	} break;
 	case 0xEA:  // JPE addr (Parity == 1 == even)
 	{
@@ -565,7 +648,9 @@ char *ByteToBinary(unsigned char num)
 
 void binprintf(unsigned x)
 {
-    printf("%s\n", ByteToBinary(x));
+    char *bin = ByteToBinary(x);
+    printf("%s\n", bin);
+    free(bin);
 }
 
 int Disassemble8080Op(unsigned char *codebuffer, int pc)
