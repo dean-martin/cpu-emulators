@@ -215,12 +215,12 @@ inline void DAA(State8080 *state)
 
     NOTE: All flags are affected
  */
-    // @TODO: review: does this even make sense
-    u8 lsb = (state->a & 0xFF);
+    u8 nibble = (~0 >> 4);
+    u8 lsb = (state->a & nibble);
     if (lsb > 9) {
 	state->a += 6;
     }
-    u8 msb = ((state->a >> 8) & 0xFF);
+    u8 msb = ((state->a >> 4) & nibble);
     if (msb > 9 || state->cc.cy) {
 	msb += 6;
 	state->a = (msb << 8) | (state->a & 0xFF);
@@ -229,9 +229,49 @@ inline void DAA(State8080 *state)
     process_flags(state, state->a);
 }
 
+inline void
+CALL(State8080 *state)
+{
+    u8 *opcode = &state->memory[state->pc];
+    u16 ret = state->pc+2;
+    state->memory[state->sp-1] = (ret >> 8) & 0xFF;
+    state->memory[state->sp-2] = (ret & 0xFF);
+    state->sp -= 2;
+    state->pc = (opcode[2] << 8) | opcode[1];
+}
+
+inline void
+JMP(State8080 *state)
+{
+    u8 *opcode = &state->memory[state->pc];
+    state->pc = (opcode[2] << 8) | opcode[1];
+}
+
+inline void
+RET(State8080 *state)
+{
+    state->pc = state->memory[state->sp++] | (state->memory[state->sp++] << 8);
+}
+
+inline void
+RST(State8080 *state, u8 NNN)
+{
+    u16 ret = state->pc+2;
+    state->memory[state->sp-1] = (ret >> 8) & 0xFF;
+    state->memory[state->sp-2] = (ret & 0xFF);
+    state->sp -= 2;
+    state->pc = 8 * NNN;
+}
+
+inline void
+PCHL(State *state)
+{
+    state->pc = (state->h << 8) | state->l;
+}
+
 int Emulate8080Op(State8080 *state)
 {
-    unsigned char *opcode = &state->memory[state->pc];
+    u8 *opcode = &state->memory[state->pc];
 
     switch(*opcode)
     {
@@ -313,13 +353,188 @@ int Emulate8080Op(State8080 *state)
 	case 0x9d: SBB(state, state->l); break; // SBB L
 	case 0x9e: SBB(state, state->data_at_memory()); break; // SBB M
 	case 0x9f: SBB(state, state->a); break; // SBB A
+	case 0xC0: // RNZ
+	{
+	    if (state->cc.z == 0)
+		RET(state);
+	} break;
+	case 0xC2:  // JNZ addr
+	{
+	    if (state->cc.z == 0)
+		JMP(state);
+	    else
+		// branch not taken
+		state->pc += 2;
+	} break;
+	case 0xC3:  // JMP addr
+	{
+	    JMP(state);
+	} break;
+	case 0xC4:  // CNZ addr
+	{
+	    if (state->cc.z == 0)
+		CALL(state);
+	    else
+		state->pc +=2;
+	} break;
+	case 0xC7: RST(state, 0); break; // RST 0
+	case 0xC8: // RZ
+	{
+	    if (state->cc.z)
+		RET(state);
+	} break;
+	case 0xC9: RET(state); break; // RET
+	case 0xCA: // JZ addr
+	{
+	    if (state->cc.z)
+		JMP(state);
+	    else
+		state->pc += 2;
+	} break;
+	case 0xCC:  // CZ addr
+	{
+	    if (state->cc.z)
+		CALL(state);
+	    else
+		state->pc += 2;
+	} break;
+	case 0xCD:  // CALL addr
+	{
+	    CALL(state);
+	} break;
 	case 0xC6: ADC(state, opcode[1]); break; // ADI word
 	case 0xCE: ACI(state, opcode[1]); break; // ACI word
+	case 0xCF: RST(state, 1); break; // RST 1
+	case 0xD0:  // RNC
+	{
+	    if (state->cc.cy == 0)
+		RET(state);
+	} break;
+	case 0xD2:  // JNC addr
+	{
+	    if (state->cc.cy == 0)
+		JMP(state);
+	    else
+		state->pc += 2;
+	} break;
 	case 0xD6: SUB(state, opcode[1]); break; // SUI word
+	case 0xD7: RST(state, 2); break; // RST 2
+	case 0xD8:  // RC
+	{
+	    if (state->cc.cy)
+		RET(state);
+	} break;
+	case 0xDA:  // JC addr
+	{
+	    if (state->cc.cy)
+		JMP(state);
+	    else
+		state->pc += 2;
+	} break;
+	case 0xD4:  // CNC addr
+	{
+	    if (state->cc.cy == 0)
+		CALL(state);
+	    else
+		state->pc += 2;
+	} break;
+	case 0xDC:  // CC addr
+	{
+	    if (state->cc.cy)
+		CALL(state);
+	    else
+		state->pc += 2;
+	} break;
 	case 0xDE: SBB(state, opcode[1]); break; // SBI word
+	case 0xDF: RST(state, 3); break; // RST 3
 	// . . .
+	case 0xE0: // RPO (Parity == 0 == odd)
+	{
+	    if (state->cc.p == 0)
+		RET(state);
+	} break;
+	case 0xE2:  // JPO addr (Parity == 0 == odd)
+	{
+	    if (state->cc.p == 0)
+		JMP(state);
+	    else
+		state->pc += 2;
+	} break;
+	case 0xE4:  // CPO addr
+	{
+	    if (state->cc.p == 0)
+		CALL(state);
+	    else
+		state->pc += 2;
+	} break;
+	case 0xE7: RST(state, 4); break; // RST 4
+	case 0xE8: // RPE
+	{
+	    if (state->cc.p)
+		RET(state);
+	} break;
+	case 0xE9: // PCHL
+	{
+	    PCHL(state);
+	    // @TODO: update return value.
+	    return 0;
+	} break;
+	case 0xEA:  // JPE addr (Parity == 1 == even)
+	{
+	    if (state->cc.p)
+		JMP(state);
+	    else
+		state->pc += 2;
+	} break;
+	case 0xEC:  // CPE addr
+	{
+	    if (state->cc.p)
+		CALL(state);
+	    else
+		state->pc += 2;
+	} break;
+	case 0xEF: RST(state, 5); break; // RST 5
+	case 0xF0:  // RP
+	{
+	    if (state->cc.s == 0)
+		RET(state);
+	} break;
+	case 0xF2:  // JP addr
+	{
+	    if (state->cc.s == 0)
+		JMP(state);
+	    else
+		state->pc += 2;
+	} break;
+	case 0xF4:  // CP addr
+	{
+	    if (state->cc.s == 0)
+		CALL(state);
+	    else
+		state->pc += 2;
+	} break;
+	case 0xF7: RST(state, 6); break; // RST 6
+	case 0xF8:  // RM
+	{
+	    if (state->cc.s)
+		RET(state);
+	} break;
+	case 0xFA:  // JM addr
+	{
+	    if (state->cc.s)
+		JMP(state);
+	    else
+		state->pc += 2;
+	} break;
+	case 0xFC:  // CM addr
+	{
+	    if (state->cc.s)
+		CALL(state);
+	    else
+		state->pc += 2;
+	} break;
         case 0xfe: UnimplementedInstruction(state); break;
-        case 0xff: UnimplementedInstruction(state); break;
+	case 0xFF: RST(state, 7); break; // RST 7
     }
     state->pc += 1;
     return 0;
