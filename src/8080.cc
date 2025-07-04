@@ -25,14 +25,12 @@ typedef struct State8080 {
     u8 *memory;
     ConditionCodes cc;
     u8 int_enable;
-
-    u8 data_at_memory();
-
+    u8 m();
 } State8080;
 
 // "Memory" register pair H & L.
-// Gets the word at the address location ((H) (L))
-u8 State8080::data_at_memory()
+// Gets the word (byte) at the address location ((H) (L))
+u8 State8080::m()
 {
     // @todo: review the h<<8 as a u8 works without a precast to u16.
     u16 offset = (h<<8) | l;
@@ -149,10 +147,22 @@ void UnimplementedInstruction(State8080 *state)
     exit(1);
 }
 
-// TODO: what
-u8 Parity(u8 ans)
+inline u8
+Parity(u8 ans)
 {
-    return 0;
+    return (ans%2) == 0;
+}
+
+inline void
+CMP(State8080 *state)
+{
+    u8 word = state->memory[state->pc+1];
+    u8 x = state->a - word;
+    state->cc.z = (x == 0);
+    state->cc.s = (0x80 == (x & 0x80));
+    state->cc.p = Parity(x);
+    state->cc.cy = (state->a < word);
+    state->pc++;
 }
 
 inline void
@@ -327,6 +337,14 @@ PCHL(State8080 *state)
     state->pc = (state->h << 8) | state->l;
 }
 
+inline void
+ANA(State8080 *state, u8 r)
+{
+    state->a = state->a & r;
+    process_flags(state, state->a);
+    state->cc.cy = 0;
+}
+
 int Emulate8080Op(State8080 *state)
 {
     u8 *opcode = &state->memory[state->pc];
@@ -402,7 +420,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x83: ADD(state, state->e); break; // ADD E
 	case 0x84: ADD(state, state->h); break; // ADD H
 	case 0x85: ADD(state, state->l); break; // ADD L
-	case 0x86: ADD(state, state->data_at_memory()); break; // ADD M
+	case 0x86: ADD(state, state->m()); break; // ADD M
 	case 0x87: ADD(state, state->a); break; // ADD A
 	case 0x88: ADC(state, state->b); break; // ADC B
 	case 0x89: ADC(state, state->c); break; // ADC C
@@ -410,7 +428,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x8b: ADC(state, state->e); break; // ADC E
 	case 0x8c: ADC(state, state->h); break; // ADC H
 	case 0x8d: ADC(state, state->l); break; // ADC L
-	case 0x8e: ADC(state, state->data_at_memory()); break; // ADC M
+	case 0x8e: ADC(state, state->m()); break; // ADC M
 	case 0x8f: ADC(state, state->a); break; // ADC A
 	case 0x90: SUB(state, state->a); break; // SUB B
 	case 0x91: SUB(state, state->c); break; // SUB C
@@ -418,7 +436,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x93: SUB(state, state->e); break; // SUB E
 	case 0x94: SUB(state, state->h); break; // SUB H
 	case 0x95: SUB(state, state->l); break; // SUB L
-	case 0x96: SUB(state, state->data_at_memory()); break; // SUB M
+	case 0x96: SUB(state, state->m()); break; // SUB M
 	case 0x97: SUB(state, state->a); break; // SUB A
 	case 0x98: SBB(state, state->b); break; // SBB A
 	case 0x99: SBB(state, state->c); break; // SBB C
@@ -426,8 +444,16 @@ int Emulate8080Op(State8080 *state)
 	case 0x9b: SBB(state, state->e); break; // SBB E
 	case 0x9c: SBB(state, state->h); break; // SBB H
 	case 0x9d: SBB(state, state->l); break; // SBB L
-	case 0x9e: SBB(state, state->data_at_memory()); break; // SBB M
+	case 0x9e: SBB(state, state->m()); break; // SBB M
 	case 0x9f: SBB(state, state->a); break; // SBB A
+	case 0xA0: ANA(state, state->b); break; // ANA B
+	case 0xA1: ANA(state, state->c); break; // ANA C
+	case 0xA2: ANA(state, state->d); break; // ANA D
+	case 0xA3: ANA(state, state->e); break; // ANA E
+	case 0xA4: ANA(state, state->h); break; // ANA H
+	case 0xA5: ANA(state, state->l); break; // ANA L
+	case 0xA6: ANA(state, state->m()); break; // ANA M
+	case 0xA7: ANA(state, state->a); break; // ANA A
 	case 0xC0: // RNZ
 	{
 	    if (state->cc.z == 0)
@@ -616,7 +642,10 @@ int Emulate8080Op(State8080 *state)
 	    else
 		state->pc += 2;
 	} break;
-        case 0xfe: UnimplementedInstruction(state); break;
+        case 0xFE:  // CPI byte
+	{
+	    CMP(state);
+	} break;
 	case 0xFF: RST(state, 7); break; // RST 7
     }
     state->pc += 1;
