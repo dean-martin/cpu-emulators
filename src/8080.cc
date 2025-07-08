@@ -8,7 +8,7 @@ typedef struct ConditionCodes {
 	uint8_t s:1;
 	uint8_t p:1;
 	uint8_t cy:1;
-	uint8_t ac:1;
+	uint8_t ac:1; // not implemented.
 	uint8_t pad:3; // padding to align to 8bit boundary? should review K&R. thought it auto happens, and not critical here too.
 } ConditionCodes;
 
@@ -24,8 +24,10 @@ typedef struct State8080 {
     u16 pc;
     u8 *memory;
     ConditionCodes cc;
+
     u8 int_enable;
     u8 m();
+
 } State8080;
 
 // "Memory" register pair H & L.
@@ -41,6 +43,7 @@ char *ByteToBinary(unsigned char num);
 void binprintf(unsigned x);
 int Disassemble8080Op(unsigned char *buffer, int pc);
 int ParseInt(char *str);
+int Emulate8080Op(State8080 *state);
 
 static int GlobalRemaining;
 
@@ -128,14 +131,20 @@ int main(int argc, char **argv)
     if (argc > 2)
 	maxops = ParseInt(argv[2]);
 
+    State8080 *state = (State8080 *) malloc(sizeof(State8080));
+    state->memory = buffer;
+    // @TODO: loop with Q keybind to quit.
+    Emulate8080Op(state);
+
+#if 0
     while (pc < fsize && pc < maxops) {
 	int ops = Disassemble8080Op(buffer, pc);
 	if (ops > 1)
 	    maxops+=(ops-1);
 	pc += ops;
     }
+#endif
 
-    //printf("remaining: %d\n", GlobalRemaining);
 
     return 0;
 }
@@ -154,15 +163,13 @@ Parity(u8 ans)
 }
 
 inline void
-CMP(State8080 *state)
+CMP(State8080 *state, u8 word)
 {
-    u8 word = state->memory[state->pc+1];
     u8 x = state->a - word;
     state->cc.z = (x == 0);
     state->cc.s = (0x80 == (x & 0x80));
     state->cc.p = Parity(x);
     state->cc.cy = (state->a < word);
-    state->pc++;
 }
 
 inline void
@@ -170,7 +177,7 @@ process_flags(State8080 *state, u16 answer)
 {
     state->cc.z = ((answer & 0xff) == 0);
     state->cc.s = ((answer & 0x80) != 0); // 0x80 is the 7th bit.
-    state->cc.cy = (answer > 0xff);
+    state->cc.cy = (0x80 == (answer & 0x80)); // i kinda like this better
     state->cc.p = Parity(answer&0xff);
 }
 
@@ -226,14 +233,14 @@ SBB(State8080 *state, u8 word)
 inline void INR_M(State8080 *state)
 {
     u16 offset = (state->h<<8) | state->l;
-    ++state->memory[offset];
+    state->memory[offset] += 1;
     process_flags_nc(state, state->memory[offset]);
 }
 
 inline void DCR_M(State8080 *state)
 {
     u16 offset = (state->h<<8) | state->l;
-    --state->memory[offset];
+    state->memory[offset] -= 1;
     process_flags_nc(state, state->memory[offset]);
 }
 
@@ -345,6 +352,56 @@ ANA(State8080 *state, u8 r)
     state->cc.cy = 0;
 }
 
+inline void
+XRA(State8080 *state, u8 r)
+{
+    state->a = state->a ^ r;
+    process_flags(state, state->a);
+    state->cc.cy = 0;
+    state->cc.ac = 0;
+}
+
+inline void
+XRI(State8080 *state)
+{
+    u8 *word = &state->memory[state->pc+1];
+    state->a = state->a ^ *word;
+    process_flags(state, state->a);
+    state->cc.cy = 0;
+    state->cc.ac = 0;
+}
+
+inline void
+ORA(State8080 *state, u8 r)
+{
+    state->a = state->a | r;
+    process_flags(state, state->a);
+    state->cc.cy = 0;
+    state->cc.ac = 0;
+}
+
+inline void
+RLC(State8080 *state)
+{
+    state->cc.cy = ((state->a >> 7) & 1);
+    state->a = (state->a << 1) | ((state->a >> 7) & 1);
+}
+
+inline void
+RAL(State8080 *state)
+{
+    u8 msb = (state->a >> 7) & 1;
+    state->a = (state->a << 1) | state->cc.cy;
+    state->cc.cy = msb;
+}
+
+inline void RAR(State8080 *state)
+{
+    u8 x = state->a;
+    state->a = (state->cc.cy << 7) | (x >> 1);
+    state->cc.cy = ((x & 1) == 1);
+}
+
 int Emulate8080Op(State8080 *state)
 {
     u8 *opcode = &state->memory[state->pc];
@@ -361,7 +418,8 @@ int Emulate8080Op(State8080 *state)
         case 0x03: INX_RP(&state->b, &state->c); break;	// INX B
         case 0x04: process_flags_nc(state, ++state->b); break;	// INR B
         case 0x05: process_flags_nc(state, --state->b); break;	// DCR B
-
+	case 0x07: RLC(state); break; // RLC
+	// --
         case 0x09: DAD_RP(state, state->b, state->c); break;	// DAD B
         case 0x0B: DCX_RP(&state->b, &state->c); break;	// DCX B
         case 0x0c: process_flags_nc(state, ++state->c); break;	// INR C
@@ -372,22 +430,17 @@ int Emulate8080Op(State8080 *state)
 	    state->a = ((x & 1) << 7) | (x >> 1);
 	    state->cc.cy = (1 == (x&1));
 	} break;
-
         case 0x13: INX_RP(&state->d, &state->e); break;	// INX D
         case 0x14: process_flags_nc(state, ++state->d); break;	// INR D
         case 0x15: process_flags_nc(state, --state->d); break;	// DCR D
-
+        case 0x17: RAL(state); break; // RAL
+	// --
         case 0x19: DAD_RP(state, state->d, state->e); break;	// DAD D
         case 0x1B: DCX_RP(&state->d, &state->e); break;	// DCX D
         case 0x1c: process_flags_nc(state, ++state->e); break;	// INR E
         case 0x1d: process_flags_nc(state, --state->e); break;	// DCR E
-	case 0x1F:  // RAR
-	{
-	    u8 x = state->a;
-	    state->a = (state->cc.cy << 7) | (x >> 1);
-	    state->cc.cy = ((x & 1) == 1);
-	} break;
-
+	case 0x1F: RAR(state); break; // RAR
+	// --
         case 0x23: INX_RP(&state->h, &state->l); break;	// INX H
         case 0x24: process_flags_nc(state, ++state->h); break;	// INR H
         case 0x25: process_flags_nc(state, --state->h); break;	// DCR H
@@ -406,11 +459,16 @@ int Emulate8080Op(State8080 *state)
         case 0x33: ++state->sp; break;	// INX SP
         case 0x34: INR_M(state); break;	// INR M
 	case 0x35: DCR_M(state); break;	// DCR L
-
+	case 0x37: state->cc.cy = 1; break; // STC
+	// --
         case 0x39: DAD_RP(state, state->sp>>8, (state->sp & 0xFF)); break;	// DAD SP
         case 0x3B: --state->sp; break;	// DCX SP
         case 0x3c: process_flags_nc(state, ++state->a);break;	// INR A
 	case 0x3d: process_flags_nc(state, --state->a); break;	// DCR A
+	case 0x3F: // CMC
+	{
+	    state->cc.cy = (~state->cc.cy) & 1;
+	} break;
 	case 0x41: state->b = state->c; break;	// MOV B,C
 	case 0x42: state->b = state->d; break;	// MOV B,D
 	case 0x43: state->b = state->e; break;	// MOV B,E
@@ -454,6 +512,30 @@ int Emulate8080Op(State8080 *state)
 	case 0xA5: ANA(state, state->l); break; // ANA L
 	case 0xA6: ANA(state, state->m()); break; // ANA M
 	case 0xA7: ANA(state, state->a); break; // ANA A
+	case 0xA8: XRA(state, state->b); break; // XRA B
+	case 0xA9: XRA(state, state->c); break; // XRA C
+	case 0xAA: XRA(state, state->d); break; // XRA D
+	case 0xAB: XRA(state, state->e); break; // XRA E
+	case 0xAC: XRA(state, state->h); break; // XRA H
+	case 0xAD: XRA(state, state->l); break; // XRA L
+	case 0xAE: XRA(state, state->m()); break; // XRA M
+	case 0xAF: XRA(state, state->a); break; // XRA A
+	case 0xB0: ORA(state, state->b); break; //ORA B
+	case 0xB1: ORA(state, state->c); break; //ORA C
+	case 0xB2: ORA(state, state->d); break; //ORA D
+	case 0xB3: ORA(state, state->e); break; //ORA E
+	case 0xB4: ORA(state, state->h); break; //ORA H
+	case 0xB5: ORA(state, state->l); break; //ORA L
+	case 0xB6: ORA(state, state->m()); break; //ORA M
+	case 0xB7: ORA(state, state->a); break; //ORA A
+	case 0xB8: CMP(state, state->b); break; // CMP B
+	case 0xB9: CMP(state, state->c); break; // CMP C
+	case 0xBA: CMP(state, state->d); break; // CMP D
+	case 0xBB: CMP(state, state->e); break; // CMP E
+	case 0xBC: CMP(state, state->h); break; // CMP H
+	case 0xBD: CMP(state, state->l); break; // CMP L
+	case 0xBE: CMP(state, state->m()); break; // CMP M
+	case 0xBF: CMP(state, state->a); break; // CMP A
 	case 0xC0: // RNZ
 	{
 	    if (state->cc.z == 0)
@@ -503,8 +585,8 @@ int Emulate8080Op(State8080 *state)
 	{
 	    CALL(state);
 	} break;
-	case 0xC6: ADC(state, opcode[1]); break; // ADI word
-	case 0xCE: ACI(state, opcode[1]); break; // ACI word
+	case 0xC6: ADC(state, opcode[1]); state->pc++; break; // ADI word
+	case 0xCE: ACI(state, opcode[1]); state->pc++; break; // ACI word
 	case 0xCF: RST(state, 1); break; // RST 1
 	case 0xD0:  // RNC
 	{
@@ -518,7 +600,7 @@ int Emulate8080Op(State8080 *state)
 	    else
 		state->pc += 2;
 	} break;
-	case 0xD6: SUB(state, opcode[1]); break; // SUI word
+	case 0xD6: SUB(state, opcode[1]); state->pc++; break; // SUI word
 	case 0xD7: RST(state, 2); break; // RST 2
 	case 0xD8:  // RC
 	{
@@ -546,7 +628,7 @@ int Emulate8080Op(State8080 *state)
 	    else
 		state->pc += 2;
 	} break;
-	case 0xDE: SBB(state, opcode[1]); break; // SBI word
+	case 0xDE: SBB(state, opcode[1]); state->pc++; break; // SBI word
 	case 0xDF: RST(state, 3); break; // RST 3
 	// . . .
 	case 0xE0: // RPO (Parity == 0 == odd)
@@ -602,6 +684,7 @@ int Emulate8080Op(State8080 *state)
 	    else
 		state->pc += 2;
 	} break;
+	case 0xEE: XRI(state); state->pc++; break; // XRI byte
 	case 0xEF: RST(state, 5); break; // RST 5
 	case 0xF0:  // RP
 	{
@@ -622,6 +705,7 @@ int Emulate8080Op(State8080 *state)
 	    else
 		state->pc += 2;
 	} break;
+	case 0xF6: ORA(state, state->memory[state->pc+1]); state->pc++; break; // ORI data
 	case 0xF7: RST(state, 6); break; // RST 6
 	case 0xF8:  // RM
 	{
@@ -644,11 +728,13 @@ int Emulate8080Op(State8080 *state)
 	} break;
         case 0xFE:  // CPI byte
 	{
-	    CMP(state);
+	    CMP(state, state->memory[state->pc+1]);
+	    state->pc++;
 	} break;
 	case 0xFF: RST(state, 7); break; // RST 7
     }
     state->pc += 1;
+
     return 0;
 }
 
