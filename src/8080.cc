@@ -23,6 +23,8 @@ typedef struct State8080 {
     u16 sp;
     u16 pc;
     u8 *memory;
+    u8 interupt_enabled;
+
     ConditionCodes cc;
 
     u8 int_enable;
@@ -395,11 +397,34 @@ RAL(State8080 *state)
     state->cc.cy = msb;
 }
 
-inline void RAR(State8080 *state)
+inline void
+RAR(State8080 *state)
 {
     u8 x = state->a;
     state->a = (state->cc.cy << 7) | (x >> 1);
     state->cc.cy = ((x & 1) == 1);
+}
+
+inline void
+HLT(State8080 *state)
+{
+    // HALT! IN THE NAME OF THE LAW!
+    printf("bye bye\n");
+    exit(0);
+}
+
+inline void
+IN(State8080 *state)
+{
+    // @TODO: implement
+    state->pc++;
+}
+
+inline void
+OUT(State8080 *state)
+{
+    // @TODO: implement
+    state->pc++;
 }
 
 int Emulate8080Op(State8080 *state)
@@ -472,6 +497,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x41: state->b = state->c; break;	// MOV B,C
 	case 0x42: state->b = state->d; break;	// MOV B,D
 	case 0x43: state->b = state->e; break;	// MOV B,E
+	case 0x76: HLT(state); break; // HLT
 	case 0x80: ADD(state, state->b); break; // ADD B
 	case 0x81: ADD(state, state->c); break; // ADD C
 	case 0x82: ADD(state, state->d); break; // ADD D
@@ -600,6 +626,7 @@ int Emulate8080Op(State8080 *state)
 	    else
 		state->pc += 2;
 	} break;
+	case 0xD3: OUT(state); break; // OUT byte
 	case 0xD6: SUB(state, opcode[1]); state->pc++; break; // SUI word
 	case 0xD7: RST(state, 2); break; // RST 2
 	case 0xD8:  // RC
@@ -614,6 +641,7 @@ int Emulate8080Op(State8080 *state)
 	    else
 		state->pc += 2;
 	} break;
+	case 0xDB: IN(state); break; // IN byte
 	case 0xD4:  // CNC addr
 	{
 	    if (state->cc.cy == 0)
@@ -698,6 +726,7 @@ int Emulate8080Op(State8080 *state)
 	    else
 		state->pc += 2;
 	} break;
+	case 0xF3:  state->interupt_enabled = 0; break; // DI
 	case 0xF4:  // CP addr
 	{
 	    if (state->cc.s == 0)
@@ -719,6 +748,7 @@ int Emulate8080Op(State8080 *state)
 	    else
 		state->pc += 2;
 	} break;
+	case 0xFB:  state->interupt_enabled = 1; break; // EI
 	case 0xFC:  // CM addr
 	{
 	    if (state->cc.s)
