@@ -427,6 +427,101 @@ OUT(State8080 *state)
     state->pc++;
 }
 
+inline void
+POP_B(State8080 *state)
+{
+    state->c = state->memory[state->sp];
+    state->b = state->memory[state->sp+1];
+    state->sp += 2;
+}
+
+inline void
+POP_D(State8080 *state)
+{
+    state->e = state->memory[state->sp];
+    state->d = state->memory[state->sp+1];
+    state->sp += 2;
+}
+
+inline void
+POP_H(State8080 *state)
+{
+    state->l = state->memory[state->sp];
+    state->h = state->memory[state->sp+1];
+    state->sp += 2;
+}
+
+inline void
+PUSH_B(State8080 *state)
+{
+    state->memory[state->sp-1] = state->b;
+    state->memory[state->sp-2] = state->c;
+    state->sp -= 2;
+}
+
+inline void
+PUSH_D(State8080 *state)
+{
+    state->memory[state->sp-1] = state->d;
+    state->memory[state->sp-2] = state->e;
+    state->sp -= 2;
+}
+
+inline void
+PUSH_H(State8080 *state)
+{
+    state->memory[state->sp-1] = state->h;
+    state->memory[state->sp-2] = state->l;
+    state->sp -= 2;
+}
+
+inline void
+SPHL(State8080 *state)
+{
+    u16 hl = (state->h << 8) | (state->l & 0xFF);
+    state->sp = hl;
+}
+
+inline void
+XTHL(State8080 *state)
+{
+    u8 l = state->l;
+    u8 h = state->h;
+    state->l = state->memory[state->sp];
+    state->h = state->memory[state->sp+1];
+    state->memory[state->sp] = l;
+    state->memory[state->sp+1] = h;
+}
+
+inline void
+POP_PSW(State8080 *state)
+{
+    state->a = state->memory[state->sp+1];
+    u8 psw = state->memory[state->sp];
+    // @TODO: review these, doesn't line up with databook.
+    // e.g. (Z) <- ((SP))sub6
+    // why is checking the first bit then?
+    state->cc.z  = (0x01 == (psw & 0x01));
+    state->cc.s  = (0x02 == (psw & 0x02));
+    state->cc.p  = (0x04 == (psw & 0x04));
+    state->cc.cy = (0x05 == (psw & 0x08));
+    state->cc.ac = (0x10 == (psw & 0x10));
+    state->sp += 2;
+}
+
+inline void
+PUSH_PSW(State8080 *state)
+{
+    state->memory[state->sp-1] = state->a;
+    u8 psw = (state->cc.z |
+		    state->cc.s << 1 |
+		    state->cc.p << 2 |
+		    state->cc.cy << 3 |
+		    state->cc.ac << 4 );
+    state->memory[state->sp-2] = psw;
+    state->sp = state->sp - 2;
+}
+
 int Emulate8080Op(State8080 *state)
 {
     u8 *opcode = &state->memory[state->pc];
@@ -567,6 +662,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.z == 0)
 		RET(state);
 	} break;
+	case 0xC1: POP_B(state); break; // POP_B
 	case 0xC2:  // JNZ addr
 	{
 	    if (state->cc.z == 0)
@@ -586,6 +682,7 @@ int Emulate8080Op(State8080 *state)
 	    else
 		state->pc +=2;
 	} break;
+	case 0xC5: PUSH_B(state); break; // PUSH B
 	case 0xC7: RST(state, 0); break; // RST 0
 	case 0xC8: // RZ
 	{
@@ -619,6 +716,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.cy == 0)
 		RET(state);
 	} break;
+	case 0xD1:POP_D(state); break; // POP D
 	case 0xD2:  // JNC addr
 	{
 	    if (state->cc.cy == 0)
@@ -627,6 +725,7 @@ int Emulate8080Op(State8080 *state)
 		state->pc += 2;
 	} break;
 	case 0xD3: OUT(state); break; // OUT byte
+	case 0xD5: PUSH_D(state); break; // PUSH D
 	case 0xD6: SUB(state, opcode[1]); state->pc++; break; // SUI word
 	case 0xD7: RST(state, 2); break; // RST 2
 	case 0xD8:  // RC
@@ -664,6 +763,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.p == 0)
 		RET(state);
 	} break;
+	case 0xE1: POP_H(state); break; // POP H
 	case 0xE2:  // JPO addr (Parity == 0 == odd)
 	{
 	    if (state->cc.p == 0)
@@ -671,6 +771,7 @@ int Emulate8080Op(State8080 *state)
 	    else
 		state->pc += 2;
 	} break;
+	case 0xE3: XTHL(state); break;	// XTHL
 	case 0xE4:  // CPO addr
 	{
 	    if (state->cc.p == 0)
@@ -678,6 +779,7 @@ int Emulate8080Op(State8080 *state)
 	    else
 		state->pc += 2;
 	} break;
+	case 0xE5: PUSH_H(state); break; // PUSH H
 	case 0xE6:  // ANI  byte
 	{
 	    u8 x = state->a & opcode[1];
@@ -719,6 +821,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.s == 0)
 		RET(state);
 	} break;
+	case 0xF1: POP_PSW(state); break; // POP PSW
 	case 0xF2:  // JP addr
 	{
 	    if (state->cc.s == 0)
@@ -734,6 +837,7 @@ int Emulate8080Op(State8080 *state)
 	    else
 		state->pc += 2;
 	} break;
+	case 0xF5: PUSH_PSW(state); break; // PUSH PSW
 	case 0xF6: ORA(state, state->memory[state->pc+1]); state->pc++; break; // ORI data
 	case 0xF7: RST(state, 6); break; // RST 6
 	case 0xF8:  // RM
@@ -741,6 +845,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.s)
 		RET(state);
 	} break;
+	case 0xF9: SPHL(state); break; // SPHL
 	case 0xFA:  // JM addr
 	{
 	    if (state->cc.s)
