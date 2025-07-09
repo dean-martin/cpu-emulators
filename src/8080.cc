@@ -48,6 +48,7 @@ int ParseInt(char *str);
 int Emulate8080Op(State8080 *state);
 
 static int GlobalRemaining;
+static bool GlobalRunning;
 
 #define max(a,b) ((a > b) ? a : b)
 #define min(a, b) ((a < b) ? a : b)
@@ -108,11 +109,15 @@ int main(int argc, char **argv)
     return 0;
 #endif
 
+    fprintf(stderr, "test\n");
+
     if (argc < 2) {
 	fprintf(stderr, "pass a rom file dummy");
-	exit(1);
+	// exit(1);
     }
-    FILE *fp = fopen(argv[1], "rb");
+    char *fname = "W:\\chip-8\\rom\\invaders";
+    ///FILE *fp = fopen(argv[1], "rb");
+    FILE *fp = fopen(fname, "rb");
     if (fp == NULL) {
 	fprintf(stderr, "failed to open file :(");
 	exit(1);
@@ -133,10 +138,17 @@ int main(int argc, char **argv)
     if (argc > 2)
 	maxops = ParseInt(argv[2]);
 
-    State8080 *state = (State8080 *) malloc(sizeof(State8080));
+    State8080 *state = (State8080 *) calloc(1, sizeof(State8080));
     state->memory = buffer;
-    // @TODO: loop with Q keybind to quit.
-    Emulate8080Op(state);
+
+    GlobalRunning = true;
+    while (GlobalRunning) {
+	// @TODO: loop with Q keybind to quit.
+	Emulate8080Op(state);
+    }
+
+    printf("beep");
+    fprintf(stderr, "boop");
 
 #if 0
     while (pc < fsize && pc < maxops) {
@@ -151,10 +163,12 @@ int main(int argc, char **argv)
     return 0;
 }
 
-void UnimplementedInstruction(State8080 *state)
+inline void
+UnimplementedInstruction(State8080 *state)
 {
     // pc will have advanced one, so undo that
-    fprintf(stderr, "Error: unimplemented instruction\n");
+    printf("Error: unimplemented instruction\nopcode: 0x%02x\n", state->memory[state->pc-1]);
+    fprintf(stderr, "Error: unimplemented instruction\nopcode: 0x%02x\n", state->memory[state->pc-1]);
     exit(1);
 }
 
@@ -327,7 +341,8 @@ JMP(State8080 *state)
 inline void
 RET(State8080 *state)
 {
-    state->pc = state->memory[state->sp++] | (state->memory[state->sp++] << 8);
+    state->pc = state->memory[state->sp] | (state->memory[state->sp+1] << 8);
+    state->pc += 2;
 }
 
 inline void
@@ -522,9 +537,19 @@ PUSH_PSW(State8080 *state)
     state->sp = state->sp - 2;
 }
 
+inline void
+LXI_H(State8080 *state)
+{
+    u8 *opcode = &state->memory[state->pc];
+    state->l = opcode[1];
+    state->h = opcode[2];
+    state->pc += 2;
+}
+
 int Emulate8080Op(State8080 *state)
 {
     u8 *opcode = &state->memory[state->pc];
+    Disassemble8080Op(state->memory, state->pc);
 
     switch(*opcode)
     {
@@ -561,6 +586,7 @@ int Emulate8080Op(State8080 *state)
         case 0x1d: process_flags_nc(state, --state->e); break;	// DCR E
 	case 0x1F: RAR(state); break; // RAR
 	// --
+	case 0x21: LXI_H(state);    // LXI H
         case 0x23: INX_RP(&state->h, &state->l); break;	// INX H
         case 0x24: process_flags_nc(state, ++state->h); break;	// INR H
         case 0x25: process_flags_nc(state, --state->h); break;	// DCR H

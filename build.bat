@@ -1,6 +1,9 @@
 @echo off
 
-cl -nologo src/8080.cc && 8080.exe rom\invaders
+REM set CommonCompilerFlags=-MT -nologo -Gm- -GR- -EHa- -Od -Oi -WX -W4 -wd4201 -wd4100 -wd4189 -wd4456 -FAsc -Z7 -Fmchip8.map
+set CommonLinkerFlags=-opt:ref
+cl %CommonCompilerFlags% src/8080.cc /link %CommonLinkerFlags%
+REM 8080.exe rom\invaders
 
 REM IF NOT EXIST build mkdir build
 REM pushd build
