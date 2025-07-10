@@ -14,7 +14,12 @@ typedef struct ConditionCodes {
 	uint8_t pad:3; // padding to align to 8bit boundary? should review K&R. thought it auto happens, and not critical here too.
 } ConditionCodes;
 
+// @see: https://gcc.gnu.org/onlinedocs/gcc-4.4.4/gcc/Structure_002dPacking-Pragmas.html
+// @see: https://stackoverflow.com/a/40643512
+// Prevent padding here for register pair memory.
+#pragma pack(push,1)
 typedef struct State8080 {
+    // @IMPORTANT: The register ordering is important here, see "_RP" functions.
     u8	a;
     u8	b;
     u8	c;
@@ -22,6 +27,7 @@ typedef struct State8080 {
     u8	e;
     u8	h;
     u8	l;
+    // EOF
     u16 sp;
     u16 pc;
     u8 *memory;
@@ -33,6 +39,7 @@ typedef struct State8080 {
     u8 m();
 
 } State8080;
+#pragma pack(pop)
 
 // "Memory" register pair H & L.
 // Gets the word (byte) at the address location ((H) (L))
@@ -41,6 +48,11 @@ u8 State8080::m()
     // @todo: review the h<<8 as a u8 works without a precast to u16.
     u16 offset = (h<<8) | l;
     return memory[offset];
+}
+
+u16 get_pair(u8 *rp)
+{
+    return (*rp) << 8 | *(rp+1);
 }
 
 char *ByteToBinary(unsigned char num);
@@ -148,7 +160,7 @@ int main(int argc, char **argv)
     while (GlobalRunning) {
 	// @TODO: loop with Q keybind to quit.
 	Emulate8080Op(state);
-	c = getc(stdin);
+	// c = getc(stdin);
 	if (c == '\n')
 	    printf("\b \b");
 	if (c == 'q')
@@ -174,8 +186,7 @@ int main(int argc, char **argv)
 inline void
 UnimplementedInstruction(State8080 *state)
 {
-    // pc will have advanced one, so undo that
-    fprintf(stderr, "Error: unimplemented instruction\nopcode: 0x%02x\n", state->memory[state->pc-1]);
+    fprintf(stderr, "Error: unimplemented instruction\nopcode: 0x%02x\naddr: 0x%02x", state->memory[state->pc], state->pc);
     exit(1);
 }
 
@@ -267,13 +278,12 @@ inline void DCR_M(State8080 *state)
     process_flags_nc(state, state->memory[offset]);
 }
 
-// @TODO: test lol
 inline void INX_RP(u8 *rh, u8 *rl)
 {
     u16 pair = (((u16) *rh) << 8) | (u16) *rl;
     pair++;
-    *rh = pair & 0xFF;
-    *rl = (pair >> 8) & 0xFF;
+    *rl = pair & 0xFF;
+    *rh = (pair >> 8) & 0xFF;
 }
 
 // @TODO: test
@@ -551,12 +561,30 @@ PUSH_PSW(State8080 *state)
 }
 
 inline void
-LXI_H(State8080 *state)
+LXI_SP(State8080 *state)
 {
-    u8 *opcode = &state->memory[state->pc];
-    state->l = opcode[1];
-    state->h = opcode[2];
+    u8 byte2 = state->memory[state->pc+1];
+    u8 byte3 = state->memory[state->pc+2];
     state->pc += 2;
+    state->sp = (byte3 << 8) | byte2;;
+}
+
+inline void
+LXI_RP(State8080 *state, u8 *rp)
+{
+    // rp2
+    *(rp+1) = state->memory[state->pc+1];  // byte2
+    // rp1
+    *rp = state->memory[state->pc+2];  // byte3
+    state->pc += 2;
+}
+
+inline void
+LDAX(State8080 *state, u8 *rp)
+{
+    u16 offset = (*rp << 8) | *(rp+1);
+    // printf("offset: 0x%04x\n", offset);
+    state->a = state->memory[offset];
 }
 
 int Emulate8080Op(State8080 *state)
@@ -576,9 +604,11 @@ int Emulate8080Op(State8080 *state)
         case 0x03: INX_RP(&state->b, &state->c); break;	// INX B
         case 0x04: process_flags_nc(state, ++state->b); break;	// INR B
         case 0x05: process_flags_nc(state, --state->b); break;	// DCR B
+	case 0x06: state->b = opcode[1]; state->pc++; break;	// MVI B,D8
 	case 0x07: RLC(state); break; // RLC
 	// --
         case 0x09: DAD_RP(state, state->b, state->c); break;	// DAD B
+	case 0x0A: LDAX(state, &state->b); break;   // LDAX B
         case 0x0B: DCX_RP(&state->b, &state->c); break;	// DCX B
         case 0x0c: process_flags_nc(state, ++state->c); break;	// INR C
         case 0x0d: process_flags_nc(state, --state->c); break;	// DCR C
@@ -588,18 +618,20 @@ int Emulate8080Op(State8080 *state)
 	    state->a = ((x & 1) << 7) | (x >> 1);
 	    state->cc.cy = (1 == (x&1));
 	} break;
+	case 0x11: LXI_RP(state, &state->d); break; // LXI D,D16
         case 0x13: INX_RP(&state->d, &state->e); break;	// INX D
         case 0x14: process_flags_nc(state, ++state->d); break;	// INR D
         case 0x15: process_flags_nc(state, --state->d); break;	// DCR D
         case 0x17: RAL(state); break; // RAL
 	// --
         case 0x19: DAD_RP(state, state->d, state->e); break;	// DAD D
+	case 0x1A: LDAX(state, &state->d); break; // LDAX D
         case 0x1B: DCX_RP(&state->d, &state->e); break;	// DCX D
         case 0x1c: process_flags_nc(state, ++state->e); break;	// INR E
         case 0x1d: process_flags_nc(state, --state->e); break;	// DCR E
 	case 0x1F: RAR(state); break; // RAR
 	// --
-	case 0x21: LXI_H(state); break;   // LXI H
+	case 0x21: LXI_RP(state, &state->h); break;   // LXI H
         case 0x23: INX_RP(&state->h, &state->l); break;	// INX H
         case 0x24: process_flags_nc(state, ++state->h); break;	// INR H
         case 0x25: process_flags_nc(state, --state->h); break;	// DCR H
@@ -615,6 +647,7 @@ int Emulate8080Op(State8080 *state)
 		// does not affect flags
 	} break;
 
+	case 0x31: LXI_SP(state); break; // @TODO
         case 0x33: ++state->sp; break;	// INX SP
         case 0x34: INR_M(state); break;	// INR M
 	case 0x35: DCR_M(state); break;	// DCR L
@@ -632,6 +665,10 @@ int Emulate8080Op(State8080 *state)
 	case 0x42: state->b = state->d; break;	// MOV B,D
 	case 0x43: state->b = state->e; break;	// MOV B,E
 	case 0x76: HLT(state); break; // HLT
+	case 0x77: // MOV M,A
+	{
+	    state->memory[get_pair(&state->h)] = state->a;
+	}break;
 	case 0x80: ADD(state, state->b); break; // ADD B
 	case 0x81: ADD(state, state->c); break; // ADD C
 	case 0x82: ADD(state, state->d); break; // ADD D
