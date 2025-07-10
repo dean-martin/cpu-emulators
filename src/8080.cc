@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <assert.h>
 
+// @TODO: fix JMP and CALL, ugly and broken
+
 typedef struct ConditionCodes {
 	uint8_t z:1;
 	uint8_t s:1;
@@ -142,9 +144,15 @@ int main(int argc, char **argv)
     state->memory = buffer;
 
     GlobalRunning = true;
+    char c = 0;
     while (GlobalRunning) {
 	// @TODO: loop with Q keybind to quit.
 	Emulate8080Op(state);
+	c = getc(stdin);
+	if (c == '\n')
+	    printf("\b \b");
+	if (c == 'q')
+	    return 0;
     }
 
     printf("beep");
@@ -167,7 +175,6 @@ inline void
 UnimplementedInstruction(State8080 *state)
 {
     // pc will have advanced one, so undo that
-    printf("Error: unimplemented instruction\nopcode: 0x%02x\n", state->memory[state->pc-1]);
     fprintf(stderr, "Error: unimplemented instruction\nopcode: 0x%02x\n", state->memory[state->pc-1]);
     exit(1);
 }
@@ -329,6 +336,8 @@ CALL(State8080 *state)
     state->memory[state->sp-2] = (ret & 0xFF);
     state->sp -= 2;
     state->pc = (opcode[2] << 8) | opcode[1];
+    // @TODO: adjust
+    state->pc--;
 }
 
 inline void
@@ -336,6 +345,8 @@ JMP(State8080 *state)
 {
     u8 *opcode = &state->memory[state->pc];
     state->pc = (opcode[2] << 8) | opcode[1];
+    // @TODO: adjust
+    state->pc--;
 }
 
 inline void
@@ -343,6 +354,8 @@ RET(State8080 *state)
 {
     state->pc = state->memory[state->sp] | (state->memory[state->sp+1] << 8);
     state->pc += 2;
+    // @TODO: adjust
+    state->pc--;
 }
 
 inline void
@@ -586,7 +599,7 @@ int Emulate8080Op(State8080 *state)
         case 0x1d: process_flags_nc(state, --state->e); break;	// DCR E
 	case 0x1F: RAR(state); break; // RAR
 	// --
-	case 0x21: LXI_H(state);    // LXI H
+	case 0x21: LXI_H(state); break;   // LXI H
         case 0x23: INX_RP(&state->h, &state->l); break;	// INX H
         case 0x24: process_flags_nc(state, ++state->h); break;	// INR H
         case 0x25: process_flags_nc(state, --state->h); break;	// DCR H
@@ -694,8 +707,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.z == 0)
 		JMP(state);
 	    else
-		// branch not taken
-		state->pc += 2;
+		state->pc += 1;
 	} break;
 	case 0xC3:  // JMP addr
 	{
@@ -706,7 +718,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.z == 0)
 		CALL(state);
 	    else
-		state->pc +=2;
+		state->pc += 1;
 	} break;
 	case 0xC5: PUSH_B(state); break; // PUSH B
 	case 0xC7: RST(state, 0); break; // RST 0
@@ -721,14 +733,14 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.z)
 		JMP(state);
 	    else
-		state->pc += 2;
+		state->pc += 1;
 	} break;
 	case 0xCC:  // CZ addr
 	{
 	    if (state->cc.z)
 		CALL(state);
 	    else
-		state->pc += 2;
+		state->pc += 1;
 	} break;
 	case 0xCD:  // CALL addr
 	{
@@ -748,7 +760,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.cy == 0)
 		JMP(state);
 	    else
-		state->pc += 2;
+		state->pc += 1;
 	} break;
 	case 0xD3: OUT(state); break; // OUT byte
 	case 0xD5: PUSH_D(state); break; // PUSH D
@@ -764,7 +776,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.cy)
 		JMP(state);
 	    else
-		state->pc += 2;
+		state->pc += 1;
 	} break;
 	case 0xDB: IN(state); break; // IN byte
 	case 0xD4:  // CNC addr
@@ -772,14 +784,14 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.cy == 0)
 		CALL(state);
 	    else
-		state->pc += 2;
+		state->pc += 1;
 	} break;
 	case 0xDC:  // CC addr
 	{
 	    if (state->cc.cy)
 		CALL(state);
 	    else
-		state->pc += 2;
+		state->pc += 1;
 	} break;
 	case 0xDE: SBB(state, opcode[1]); state->pc++; break; // SBI word
 	case 0xDF: RST(state, 3); break; // RST 3
@@ -795,7 +807,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.p == 0)
 		JMP(state);
 	    else
-		state->pc += 2;
+		state->pc += 1;
 	} break;
 	case 0xE3: XTHL(state); break;	// XTHL
 	case 0xE4:  // CPO addr
@@ -803,7 +815,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.p == 0)
 		CALL(state);
 	    else
-		state->pc += 2;
+		state->pc += 1;
 	} break;
 	case 0xE5: PUSH_H(state); break; // PUSH H
 	case 0xE6:  // ANI  byte
@@ -831,14 +843,14 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.p)
 		JMP(state);
 	    else
-		state->pc += 2;
+		state->pc += 1;
 	} break;
 	case 0xEC:  // CPE addr
 	{
 	    if (state->cc.p)
 		CALL(state);
 	    else
-		state->pc += 2;
+		state->pc += 1;
 	} break;
 	case 0xEE: XRI(state); state->pc++; break; // XRI byte
 	case 0xEF: RST(state, 5); break; // RST 5
@@ -853,7 +865,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.s == 0)
 		JMP(state);
 	    else
-		state->pc += 2;
+		state->pc += 1;
 	} break;
 	case 0xF3:  state->interupt_enabled = 0; break; // DI
 	case 0xF4:  // CP addr
@@ -861,7 +873,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.s == 0)
 		CALL(state);
 	    else
-		state->pc += 2;
+		state->pc += 1;
 	} break;
 	case 0xF5: PUSH_PSW(state); break; // PUSH PSW
 	case 0xF6: ORA(state, state->memory[state->pc+1]); state->pc++; break; // ORI data
@@ -877,7 +889,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.s)
 		JMP(state);
 	    else
-		state->pc += 2;
+		state->pc += 1;
 	} break;
 	case 0xFB:  state->interupt_enabled = 1; break; // EI
 	case 0xFC:  // CM addr
@@ -885,7 +897,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.s)
 		CALL(state);
 	    else
-		state->pc += 2;
+		state->pc += 1;
 	} break;
         case 0xFE:  // CPI byte
 	{
@@ -893,8 +905,15 @@ int Emulate8080Op(State8080 *state)
 	    state->pc++;
 	} break;
 	case 0xFF: RST(state, 7); break; // RST 7
+	default: UnimplementedInstruction(state); break;
     }
     state->pc += 1;
+    /* print out processor state */
+    printf("\tC=%d,P=%d,S=%d,Z=%d\n", state->cc.cy, state->cc.p,
+	    state->cc.s, state->cc.z);
+    printf("\tA $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP %04x\n",
+	    state->a, state->b, state->c, state->d,
+	    state->e, state->h, state->l, state->sp);
 
     return 0;
 }
