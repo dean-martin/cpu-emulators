@@ -3,6 +3,11 @@
 #include <stdlib.h>
 #include <assert.h>
 
+int isdigit(char c)
+{
+    return (c >= '0') && (c <= '9');
+}
+
 // @TODO: fix JMP and CALL, ugly and broken
 
 typedef struct ConditionCodes {
@@ -36,23 +41,19 @@ typedef struct State8080 {
     ConditionCodes cc;
 
     u8 int_enable;
-    u8 m();
 
 } State8080;
 #pragma pack(pop)
 
-// "Memory" register pair H & L.
-// Gets the word (byte) at the address location ((H) (L))
-u8 State8080::m()
-{
-    // @todo: review the h<<8 as a u8 works without a precast to u16.
-    u16 offset = (h<<8) | l;
-    return memory[offset];
-}
-
 u16 get_pair(u8 *rp)
 {
-    return (*rp) << 8 | *(rp+1);
+    return ((*rp) << 8) | *(rp+1);
+}
+
+// Memory Location of (H L)
+u8 *memloc(State8080 *state)
+{
+    return &state->memory[get_pair(&state->h)];
 }
 
 char *ByteToBinary(unsigned char num);
@@ -63,6 +64,7 @@ int Emulate8080Op(State8080 *state);
 
 static int GlobalRemaining;
 static bool GlobalRunning;
+static int GlobalSteps;
 
 #define max(a,b) ((a > b) ? a : b)
 #define min(a, b) ((a < b) ? a : b)
@@ -157,18 +159,32 @@ int main(int argc, char **argv)
 
     GlobalRunning = true;
     char c = 0;
+    char CharBuffer[256] = {};
+    int BufferIndex = 0;
+    int StartIndex = 0;
     while (GlobalRunning) {
-	// @TODO: loop with Q keybind to quit.
 	Emulate8080Op(state);
-	// c = getc(stdin);
-	if (c == '\n')
-	    printf("\b \b");
+	c = getchar();
 	if (c == 'q')
 	    return 0;
+	CharBuffer[BufferIndex++] = c;
+	if (c == '\n') {
+	    printf("\b \b");
+	    char *s = &CharBuffer[StartIndex];
+	    StartIndex = BufferIndex;
+	    int n = 0;
+	    int i = 0;
+	    while (isdigit(c = *s++))
+		n = (n * 10) + c-'0', i++;
+	    if (n > 0) {
+		n -= i+1; // because input is borkd
+		printf("advancing %d steps\n", n);
+		while (n-- > 0) {
+		    Emulate8080Op(state);
+		}
+	    }
+	}
     }
-
-    printf("beep");
-    fprintf(stderr, "boop");
 
 #if 0
     while (pc < fsize && pc < maxops) {
@@ -178,7 +194,6 @@ int main(int argc, char **argv)
 	pc += ops;
     }
 #endif
-
 
     return 0;
 }
@@ -363,9 +378,6 @@ inline void
 RET(State8080 *state)
 {
     state->pc = state->memory[state->sp] | (state->memory[state->sp+1] << 8);
-    state->pc += 2;
-    // @TODO: adjust
-    state->pc--;
 }
 
 inline void
@@ -589,6 +601,7 @@ LDAX(State8080 *state, u8 *rp)
 
 int Emulate8080Op(State8080 *state)
 {
+    GlobalSteps++;
     u8 *opcode = &state->memory[state->pc];
     Disassemble8080Op(state->memory, state->pc);
 
@@ -610,8 +623,9 @@ int Emulate8080Op(State8080 *state)
         case 0x09: DAD_RP(state, state->b, state->c); break;	// DAD B
 	case 0x0A: LDAX(state, &state->b); break;   // LDAX B
         case 0x0B: DCX_RP(&state->b, &state->c); break;	// DCX B
-        case 0x0c: process_flags_nc(state, ++state->c); break;	// INR C
-        case 0x0d: process_flags_nc(state, --state->c); break;	// DCR C
+        case 0x0C: process_flags_nc(state, ++state->c); break;	// INR C
+        case 0x0D: process_flags_nc(state, --state->c); break;	// DCR C
+	case 0x0E: state->c = opcode[1]; state->pc++; break;   // MVI C,D8
 	case 0x0F:  // RRC
 	{
 	    u8 x = state->a;
@@ -635,6 +649,7 @@ int Emulate8080Op(State8080 *state)
         case 0x23: INX_RP(&state->h, &state->l); break;	// INX H
         case 0x24: process_flags_nc(state, ++state->h); break;	// INR H
         case 0x25: process_flags_nc(state, --state->h); break;	// DCR H
+        case 0x26: state->h = opcode[1]; state->pc++; break;   //MVI H,D8
         case 0x27: DAA(state); break;	// DAA
 
         case 0x29: DAD_RP(state, state->h, state->l); break;	// DAD H
@@ -651,6 +666,7 @@ int Emulate8080Op(State8080 *state)
         case 0x33: ++state->sp; break;	// INX SP
         case 0x34: INR_M(state); break;	// INR M
 	case 0x35: DCR_M(state); break;	// DCR L
+	case 0x36: *memloc(state) = opcode[1]; state->pc++; break; // MVI M,D8
 	case 0x37: state->cc.cy = 1; break; // STC
 	// --
         case 0x39: DAD_RP(state, state->sp>>8, (state->sp & 0xFF)); break;	// DAD SP
@@ -664,10 +680,12 @@ int Emulate8080Op(State8080 *state)
 	case 0x41: state->b = state->c; break;	// MOV B,C
 	case 0x42: state->b = state->d; break;	// MOV B,D
 	case 0x43: state->b = state->e; break;	// MOV B,E
+	case 0x6F: state->l = state->a; break;	// MOV L,A
+	case 0x7C: state->a = state->h; break; // MOV A,H
 	case 0x76: HLT(state); break; // HLT
 	case 0x77: // MOV M,A
 	{
-	    state->memory[get_pair(&state->h)] = state->a;
+	    *memloc(state) = state->a;
 	}break;
 	case 0x80: ADD(state, state->b); break; // ADD B
 	case 0x81: ADD(state, state->c); break; // ADD C
@@ -675,7 +693,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x83: ADD(state, state->e); break; // ADD E
 	case 0x84: ADD(state, state->h); break; // ADD H
 	case 0x85: ADD(state, state->l); break; // ADD L
-	case 0x86: ADD(state, state->m()); break; // ADD M
+	case 0x86: ADD(state, *memloc(state)); break; // ADD M
 	case 0x87: ADD(state, state->a); break; // ADD A
 	case 0x88: ADC(state, state->b); break; // ADC B
 	case 0x89: ADC(state, state->c); break; // ADC C
@@ -683,7 +701,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x8b: ADC(state, state->e); break; // ADC E
 	case 0x8c: ADC(state, state->h); break; // ADC H
 	case 0x8d: ADC(state, state->l); break; // ADC L
-	case 0x8e: ADC(state, state->m()); break; // ADC M
+	case 0x8e: ADC(state, *memloc(state)); break; // ADC M
 	case 0x8f: ADC(state, state->a); break; // ADC A
 	case 0x90: SUB(state, state->a); break; // SUB B
 	case 0x91: SUB(state, state->c); break; // SUB C
@@ -691,7 +709,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x93: SUB(state, state->e); break; // SUB E
 	case 0x94: SUB(state, state->h); break; // SUB H
 	case 0x95: SUB(state, state->l); break; // SUB L
-	case 0x96: SUB(state, state->m()); break; // SUB M
+	case 0x96: SUB(state, *memloc(state)); break; // SUB M
 	case 0x97: SUB(state, state->a); break; // SUB A
 	case 0x98: SBB(state, state->b); break; // SBB A
 	case 0x99: SBB(state, state->c); break; // SBB C
@@ -699,7 +717,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x9b: SBB(state, state->e); break; // SBB E
 	case 0x9c: SBB(state, state->h); break; // SBB H
 	case 0x9d: SBB(state, state->l); break; // SBB L
-	case 0x9e: SBB(state, state->m()); break; // SBB M
+	case 0x9e: SBB(state, *memloc(state)); break; // SBB M
 	case 0x9f: SBB(state, state->a); break; // SBB A
 	case 0xA0: ANA(state, state->b); break; // ANA B
 	case 0xA1: ANA(state, state->c); break; // ANA C
@@ -707,7 +725,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xA3: ANA(state, state->e); break; // ANA E
 	case 0xA4: ANA(state, state->h); break; // ANA H
 	case 0xA5: ANA(state, state->l); break; // ANA L
-	case 0xA6: ANA(state, state->m()); break; // ANA M
+	case 0xA6: ANA(state, *memloc(state)); break; // ANA M
 	case 0xA7: ANA(state, state->a); break; // ANA A
 	case 0xA8: XRA(state, state->b); break; // XRA B
 	case 0xA9: XRA(state, state->c); break; // XRA C
@@ -715,7 +733,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xAB: XRA(state, state->e); break; // XRA E
 	case 0xAC: XRA(state, state->h); break; // XRA H
 	case 0xAD: XRA(state, state->l); break; // XRA L
-	case 0xAE: XRA(state, state->m()); break; // XRA M
+	case 0xAE: XRA(state, *memloc(state)); break; // XRA M
 	case 0xAF: XRA(state, state->a); break; // XRA A
 	case 0xB0: ORA(state, state->b); break; //ORA B
 	case 0xB1: ORA(state, state->c); break; //ORA C
@@ -723,7 +741,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xB3: ORA(state, state->e); break; //ORA E
 	case 0xB4: ORA(state, state->h); break; //ORA H
 	case 0xB5: ORA(state, state->l); break; //ORA L
-	case 0xB6: ORA(state, state->m()); break; //ORA M
+	case 0xB6: ORA(state, *memloc(state)); break; //ORA M
 	case 0xB7: ORA(state, state->a); break; //ORA A
 	case 0xB8: CMP(state, state->b); break; // CMP B
 	case 0xB9: CMP(state, state->c); break; // CMP C
@@ -731,7 +749,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xBB: CMP(state, state->e); break; // CMP E
 	case 0xBC: CMP(state, state->h); break; // CMP H
 	case 0xBD: CMP(state, state->l); break; // CMP L
-	case 0xBE: CMP(state, state->m()); break; // CMP M
+	case 0xBE: CMP(state, *memloc(state)); break; // CMP M
 	case 0xBF: CMP(state, state->a); break; // CMP A
 	case 0xC0: // RNZ
 	{
@@ -946,6 +964,7 @@ int Emulate8080Op(State8080 *state)
     }
     state->pc += 1;
     /* print out processor state */
+    printf("\tStep: %d\n", GlobalSteps);
     printf("\tC=%d,P=%d,S=%d,Z=%d\n", state->cc.cy, state->cc.p,
 	    state->cc.s, state->cc.z);
     printf("\tA $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP %04x\n",
