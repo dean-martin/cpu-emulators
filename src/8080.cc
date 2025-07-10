@@ -64,7 +64,7 @@ int Emulate8080Op(State8080 *state);
 
 static int GlobalRemaining;
 static bool GlobalRunning;
-static int GlobalSteps;
+static long long GlobalSteps;
 
 #define max(a,b) ((a > b) ? a : b)
 #define min(a, b) ((a < b) ? a : b)
@@ -161,7 +161,6 @@ int main(int argc, char **argv)
     char c = 0;
     char CharBuffer[256] = {};
     int BufferIndex = 0;
-    int StartIndex = 0;
     while (GlobalRunning) {
 	Emulate8080Op(state);
 	c = getchar();
@@ -170,15 +169,16 @@ int main(int argc, char **argv)
 	CharBuffer[BufferIndex++] = c;
 	if (c == '\n') {
 	    printf("\b \b");
-	    char *s = &CharBuffer[StartIndex];
-	    StartIndex = BufferIndex;
+	    char *s = &CharBuffer[0];
+	    BufferIndex = 0;
 	    int n = 0;
 	    int i = 0;
 	    while (isdigit(c = *s++))
 		n = (n * 10) + c-'0', i++;
 	    if (n > 0) {
-		n -= i+1; // because input is borkd
+		n -= (i); // because input is borkd
 		printf("advancing %d steps\n", n);
+		//getchar();
 		while (n-- > 0) {
 		    Emulate8080Op(state);
 		}
@@ -899,6 +899,11 @@ int Emulate8080Op(State8080 *state)
 		JMP(state);
 	    else
 		state->pc += 1;
+	} break;
+	case 0xEB: //XCHG
+	{
+	    state->h, state->d = state->d, state->h;
+	    state->l, state->e = state->e, state->l;
 	} break;
 	case 0xEC:  // CPE addr
 	{
