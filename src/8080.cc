@@ -45,13 +45,15 @@ typedef struct State8080 {
 } State8080;
 #pragma pack(pop)
 
-u16 get_pair(u8 *rp)
+inline u16
+get_pair(u8 *rp)
 {
     return ((*rp) << 8) | *(rp+1);
 }
 
 // Memory Location of (H L)
-u8 *memloc(State8080 *state)
+u8 *
+memloc(State8080 *state)
 {
     return &state->memory[get_pair(&state->h)];
 }
@@ -162,28 +164,25 @@ int main(int argc, char **argv)
     char CharBuffer[256] = {};
     int BufferIndex = 0;
     while (GlobalRunning) {
-	Emulate8080Op(state);
-	c = getchar();
-	if (c == 'q')
-	    return 0;
-	CharBuffer[BufferIndex++] = c;
-	if (c == '\n') {
-	    printf("\b \b");
-	    char *s = &CharBuffer[0];
-	    BufferIndex = 0;
-	    int n = 0;
-	    int i = 0;
-	    while (isdigit(c = *s++))
-		n = (n * 10) + c-'0', i++;
-	    if (n > 0) {
-		n -= (i); // because input is borkd
-		printf("advancing %d steps\n", n);
-		//getchar();
-		while (n-- > 0) {
-		    Emulate8080Op(state);
-		}
-	    }
+	while ((c = getchar()) != '\n') {
+	    CharBuffer[BufferIndex++] = c;
+	    if (c == 'q')
+		return 0;
 	}
+	printf("\b \b");
+	char *s = &CharBuffer[0];
+	BufferIndex = 0;
+	int n = 0;
+	while (isdigit(c = *s++))
+	    n = (n * 10) + c-'0';
+	if (n <= 0)
+	    n = 1;
+	// printf("advancing %d steps\n", n);
+	// getchar();
+	while (n-- > 0)
+	    Emulate8080Op(state);
+	for (int i = 0; i < 256; i++)
+	    CharBuffer[i] = 0;
     }
 
 #if 0
