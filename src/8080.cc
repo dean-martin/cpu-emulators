@@ -67,6 +67,7 @@ int Emulate8080Op(State8080 *state);
 static int GlobalRemaining;
 static bool GlobalRunning;
 static long long GlobalSteps;
+static bool GlobalDebugPrint;
 
 #define max(a,b) ((a > b) ? a : b)
 #define min(a, b) ((a < b) ? a : b)
@@ -161,7 +162,8 @@ int main(int argc, char **argv)
 
     GlobalRunning = true;
     char c = 0;
-    char CharBuffer[256] = {};
+#define MAX_CHAR 256
+    char CharBuffer[MAX_CHAR] = {};
     int BufferIndex = 0;
     while (GlobalRunning) {
 	while ((c = getchar()) != '\n') {
@@ -179,9 +181,14 @@ int main(int argc, char **argv)
 	    n = 1;
 	// printf("advancing %d steps\n", n);
 	// getchar();
-	while (n-- > 0)
+	while (n-- > 0) {
+	    if (n <= 100)
+		GlobalDebugPrint = 1;
+	    else
+		GlobalDebugPrint = 0;
 	    Emulate8080Op(state);
-	for (int i = 0; i < 256; i++)
+	}
+	for (int i = 0; i < MAX_CHAR; i++)
 	    CharBuffer[i] = 0;
     }
 
@@ -602,7 +609,8 @@ int Emulate8080Op(State8080 *state)
 {
     GlobalSteps++;
     u8 *opcode = &state->memory[state->pc];
-    Disassemble8080Op(state->memory, state->pc);
+    if (GlobalDebugPrint)
+	Disassemble8080Op(state->memory, state->pc);
 
     switch(*opcode)
     {
@@ -968,12 +976,14 @@ int Emulate8080Op(State8080 *state)
     }
     state->pc += 1;
     /* print out processor state */
-    printf("\tStep: %d\n", GlobalSteps);
-    printf("\tC=%d,P=%d,S=%d,Z=%d\n", state->cc.cy, state->cc.p,
-	    state->cc.s, state->cc.z);
-    printf("\tA $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP %04x\n",
-	    state->a, state->b, state->c, state->d,
-	    state->e, state->h, state->l, state->sp);
+    if (GlobalDebugPrint) {
+	printf("\tStep: %d\n", GlobalSteps);
+	printf("\tC=%d,P=%d,S=%d,Z=%d\n", state->cc.cy, state->cc.p,
+		state->cc.s, state->cc.z);
+	printf("\tA $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP %04x\n",
+		state->a, state->b, state->c, state->d,
+		state->e, state->h, state->l, state->sp);
+    }
 
     return 0;
 }
