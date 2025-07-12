@@ -1,62 +1,10 @@
-#include "common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
-
-int isdigit(char c)
-{
-    return (c >= '0') && (c <= '9');
-}
+#include "8080.h"
 
 // @TODO: fix JMP and CALL, ugly and broken
 
-typedef struct ConditionCodes {
-	uint8_t z:1;
-	uint8_t s:1;
-	uint8_t p:1;
-	uint8_t cy:1;
-	uint8_t ac:1; // not implemented.
-	uint8_t pad:3; // padding to align to 8bit boundary? should review K&R. thought it auto happens, and not critical here too.
-} ConditionCodes;
-
-// @see: https://gcc.gnu.org/onlinedocs/gcc-4.4.4/gcc/Structure_002dPacking-Pragmas.html
-// @see: https://stackoverflow.com/a/40643512
-// Prevent padding here for register pair memory.
-#pragma pack(push,1)
-typedef struct State8080 {
-    // @IMPORTANT: The register ordering is important here, see "_RP" functions.
-    u8	a;
-    u8	b;
-    u8	c;
-    u8	d;
-    u8	e;
-    u8	h;
-    u8	l;
-    // EOF
-    u16 sp;
-    u16 pc;
-    u8 *memory;
-    u8 interupt_enabled;
-
-    ConditionCodes cc;
-
-    u8 int_enable;
-
-} State8080;
-#pragma pack(pop)
-
-inline u16
-get_pair(u8 *rp)
-{
-    return ((*rp) << 8) | *(rp+1);
-}
-
-// Memory Location of (H L)
-u8 *
-memloc(State8080 *state)
-{
-    return &state->memory[get_pair(&state->h)];
-}
 
 char *ByteToBinary(unsigned char num);
 void binprintf(unsigned x);
@@ -69,8 +17,18 @@ static bool GlobalRunning;
 static long long GlobalSteps;
 static bool GlobalDebugPrint;
 
-#define max(a,b) ((a > b) ? a : b)
-#define min(a, b) ((a < b) ? a : b)
+
+inline u16
+get_pair(u8 *rp)
+{
+    return ((*rp) << 8) | *(rp+1);
+}
+
+// Memory Location of (H L)
+u8 *memloc(State8080 *state)
+{
+    return &state->memory[get_pair(&state->h)];
+}
 
 void p(int a);
 // bonus points for figuring out multiplication using bit shifts. :O
@@ -161,15 +119,20 @@ int main(int argc, char **argv)
     state->memory = buffer;
 
     GlobalRunning = true;
+
+    // Run at least one op to match up with 8080js
+    GlobalDebugPrint = 1;
+    Emulate8080Op(state);
+
     char c = 0;
 #define MAX_CHAR 256
     char CharBuffer[MAX_CHAR] = {};
     int BufferIndex = 0;
     while (GlobalRunning) {
 	while ((c = getchar()) != '\n') {
-	    CharBuffer[BufferIndex++] = c;
 	    if (c == 'q')
-		return 0;
+		exit(0);
+	    CharBuffer[BufferIndex++] = c;
 	}
 	printf("\b \b");
 	char *s = &CharBuffer[0];
@@ -769,7 +732,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.z == 0)
 		JMP(state);
 	    else
-		state->pc += 1;
+		state->pc += 2;
 	} break;
 	case 0xC3:  // JMP addr
 	{
@@ -780,7 +743,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.z == 0)
 		CALL(state);
 	    else
-		state->pc += 1;
+		state->pc += 2;
 	} break;
 	case 0xC5: PUSH_B(state); break; // PUSH B
 	case 0xC7: RST(state, 0); break; // RST 0
@@ -795,14 +758,14 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.z)
 		JMP(state);
 	    else
-		state->pc += 1;
+		state->pc += 2;
 	} break;
 	case 0xCC:  // CZ addr
 	{
 	    if (state->cc.z)
 		CALL(state);
 	    else
-		state->pc += 1;
+		state->pc += 2;
 	} break;
 	case 0xCD:  // CALL addr
 	{
@@ -822,7 +785,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.cy == 0)
 		JMP(state);
 	    else
-		state->pc += 1;
+		state->pc += 2;
 	} break;
 	case 0xD3: OUT(state); break; // OUT byte
 	case 0xD5: PUSH_D(state); break; // PUSH D
@@ -838,7 +801,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.cy)
 		JMP(state);
 	    else
-		state->pc += 1;
+		state->pc += 2;
 	} break;
 	case 0xDB: IN(state); break; // IN byte
 	case 0xD4:  // CNC addr
@@ -846,14 +809,14 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.cy == 0)
 		CALL(state);
 	    else
-		state->pc += 1;
+		state->pc += 2;
 	} break;
 	case 0xDC:  // CC addr
 	{
 	    if (state->cc.cy)
 		CALL(state);
 	    else
-		state->pc += 1;
+		state->pc += 2;
 	} break;
 	case 0xDE: SBB(state, opcode[1]); state->pc++; break; // SBI word
 	case 0xDF: RST(state, 3); break; // RST 3
@@ -869,7 +832,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.p == 0)
 		JMP(state);
 	    else
-		state->pc += 1;
+		state->pc += 2;
 	} break;
 	case 0xE3: XTHL(state); break;	// XTHL
 	case 0xE4:  // CPO addr
@@ -877,7 +840,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.p == 0)
 		CALL(state);
 	    else
-		state->pc += 1;
+		state->pc += 2;
 	} break;
 	case 0xE5: PUSH_H(state); break; // PUSH H
 	case 0xE6:  // ANI  byte
@@ -905,7 +868,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.p)
 		JMP(state);
 	    else
-		state->pc += 1;
+		state->pc += 2;
 	} break;
 	case 0xEB: //XCHG
 	{
@@ -917,7 +880,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.p)
 		CALL(state);
 	    else
-		state->pc += 1;
+		state->pc += 2;
 	} break;
 	case 0xEE: XRI(state); state->pc++; break; // XRI byte
 	case 0xEF: RST(state, 5); break; // RST 5
@@ -932,7 +895,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.s == 0)
 		JMP(state);
 	    else
-		state->pc += 1;
+		state->pc += 2;
 	} break;
 	case 0xF3:  state->interupt_enabled = 0; break; // DI
 	case 0xF4:  // CP addr
@@ -940,7 +903,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.s == 0)
 		CALL(state);
 	    else
-		state->pc += 1;
+		state->pc += 2;
 	} break;
 	case 0xF5: PUSH_PSW(state); break; // PUSH PSW
 	case 0xF6: ORA(state, state->memory[state->pc+1]); state->pc++; break; // ORI data
@@ -956,7 +919,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.s)
 		JMP(state);
 	    else
-		state->pc += 1;
+		state->pc += 2;
 	} break;
 	case 0xFB:  state->interupt_enabled = 1; break; // EI
 	case 0xFC:  // CM addr
@@ -964,7 +927,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.s)
 		CALL(state);
 	    else
-		state->pc += 1;
+		state->pc += 2;
 	} break;
         case 0xFE:  // CPI byte
 	{
