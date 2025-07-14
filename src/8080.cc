@@ -17,17 +17,14 @@ static bool GlobalRunning;
 static long long GlobalSteps;
 static bool GlobalDebugPrint;
 
-
-inline u16
-get_pair(u8 *rp)
-{
-    return ((*rp) << 8) | *(rp+1);
-}
-
 // Memory Location of (H L)
 u8 *memloc(State8080 *state)
 {
-    return &state->memory[get_pair(&state->h)];
+    bytes b;
+    b.high = state->h;
+    b.low = state->l;
+    // printf("offset: 0x%x\n", b.data);
+    return &state->memory[b.data];
 }
 
 void p(int a);
@@ -104,7 +101,7 @@ int main(int argc, char **argv)
     int fsize = ftell(fp);
     fseek(fp, 0L, SEEK_SET);
 
-    unsigned char *buffer = (unsigned char *) malloc(fsize);
+    u8 *buffer = (unsigned char *) malloc(fsize);
 
     fread(buffer, fsize, 1, fp);
     fclose(fp);
@@ -131,14 +128,14 @@ int main(int argc, char **argv)
     while (GlobalRunning) {
 	while ((c = getchar()) != '\n') {
 	    if (c == 'q')
-		exit(0);
+		goto end;
 	    CharBuffer[BufferIndex++] = c;
 	}
 	printf("\b \b");
-	char *s = &CharBuffer[0];
+	char *s = CharBuffer;
 	BufferIndex = 0;
 	int n = 0;
-	while (isdigit(c = *s++))
+	while (isdigit((c = *s++)))
 	    n = (n * 10) + c-'0';
 	if (n <= 0)
 	    n = 1;
@@ -163,6 +160,14 @@ int main(int argc, char **argv)
 	pc += ops;
     }
 #endif
+
+end:
+
+    printf("the end\n");
+
+    // @TODO: what are the heap corruption bugs?
+    // free(buffer);
+    // free(state);
 
     return 0;
 }
@@ -346,7 +351,12 @@ JMP(State8080 *state)
 inline void
 RET(State8080 *state)
 {
-    state->pc = state->memory[state->sp] | (state->memory[state->sp+1] << 8);
+    bytes b;
+    b.low = state->memory[state->sp];
+    b.high = state->memory[state->sp+1];
+
+    state->pc = b.data;
+    state->sp += 2;
 }
 
 inline void
@@ -568,6 +578,21 @@ LDAX(State8080 *state, u8 *rp)
     state->a = state->memory[offset];
 }
 
+inline u16
+GetByte3Byte2(State8080 *state)
+{
+    bytes b;
+    b.high = state->pc+2; // byte 3
+    b.low = state->pc+1; // byte 2
+    return b.data;
+}
+
+inline void
+LDA(State8080 *state)
+{
+    state->a = state->memory[GetByte3Byte2(state)];
+}
+
 int Emulate8080Op(State8080 *state)
 {
     GlobalSteps++;
@@ -640,6 +665,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x37: state->cc.cy = 1; break; // STC
 	// --
         case 0x39: DAD_RP(state, state->sp>>8, (state->sp & 0xFF)); break;	// DAD SP
+	case 0x3A: LDA(state); break;	// LDA addr
         case 0x3B: --state->sp; break;	// DCX SP
         case 0x3c: process_flags_nc(state, ++state->a);break;	// INR A
 	case 0x3d: process_flags_nc(state, --state->a); break;	// DCR A
@@ -650,13 +676,16 @@ int Emulate8080Op(State8080 *state)
 	case 0x41: state->b = state->c; break;	// MOV B,C
 	case 0x42: state->b = state->d; break;	// MOV B,D
 	case 0x43: state->b = state->e; break;	// MOV B,E
+	case 0x5E: state->e = *memloc(state); break;	// MOV E,M
+	case 0x56: state->d = *memloc(state); break;	// MOV D,M
 	case 0x6F: state->l = state->a; break;	// MOV L,A
+	case 0x66: state->h = *memloc(state); break;	// MOV H,M
 	case 0x7C: state->a = state->h; break; // MOV A,H
 	case 0x76: HLT(state); break; // HLT
-	case 0x77: // MOV M,A
-	{
-	    *memloc(state) = state->a;
-	}break;
+	case 0x77: *memloc(state) = state->a; break; // MOV M,A
+	case 0x7A: state->a = state->d; break;	// MOV A,D
+	case 0x7B: state->a = state->e; break;	// MOV A,E
+	case 0x7E: state->a = *memloc(state); break;	// MOV A,M
 	case 0x80: ADD(state, state->b); break; // ADD B
 	case 0x81: ADD(state, state->c); break; // ADD C
 	case 0x82: ADD(state, state->d); break; // ADD D
@@ -964,12 +993,13 @@ int ParseInt(char *str)
 
 char *ByteToBinary(unsigned char num)
 {
-    char *str = (char *) calloc(1, sizeof(char[8+1]));
+    char *str = (char *) malloc(sizeof(char[8+1]));
 
     for (int i = 7; i >= 0; i--) {
 	str[i] = (num & 01) ? '1' : '0';
 	num >>= 1;
     }
+    str[8] = '\0';
 
     return str;
 }
