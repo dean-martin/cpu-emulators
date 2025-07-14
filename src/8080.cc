@@ -5,7 +5,6 @@
 
 // @TODO: fix JMP and CALL, ugly and broken
 
-
 char *ByteToBinary(unsigned char num);
 void binprintf(unsigned x);
 int Disassemble8080Op(unsigned char *buffer, int pc);
@@ -17,8 +16,9 @@ static bool GlobalRunning;
 static long long GlobalSteps;
 static bool GlobalDebugPrint;
 
-// Memory Location of (H L)
-u8 *memloc(State8080 *state)
+// Pointer to ((H) (L))
+// H&L pair is considered "memory" in the data book.
+u8 *MemoryLocation(State8080 *state)
 {
     bytes b;
     b.high = state->h;
@@ -355,7 +355,12 @@ RET(State8080 *state)
     b.low = state->memory[state->sp];
     b.high = state->memory[state->sp+1];
 
-    state->pc = b.data;
+    state->pc = state->memory[state->sp] | (state->memory[state->sp+1] << 8);
+    if (state->pc != b.data) {
+	fprintf(stderr, "AHHHHHHHHHHHHHH");
+	exit(1);
+    }
+    // state->pc = b.data;
     state->sp += 2;
 }
 
@@ -578,19 +583,28 @@ LDAX(State8080 *state, u8 *rp)
     state->a = state->memory[offset];
 }
 
-inline u16
-GetByte3Byte2(State8080 *state)
+// Pointer to ((byte 3) (byte 2))
+inline u8 *
+GetAddressMemory(State8080 *state)
 {
-    bytes b;
-    b.high = state->pc+2; // byte 3
-    b.low = state->pc+1; // byte 2
-    return b.data;
+    u16 Address = (state->memory[state->pc+2] << 8) | (state->memory[state->pc+1]);
+    u8 *Result = &state->memory[Address];
+    return(Result);
 }
 
 inline void
 LDA(State8080 *state)
 {
-    state->a = state->memory[GetByte3Byte2(state)];
+    state->a = *GetAddressMemory(state);
+    state->pc += 2;
+}
+
+inline void
+STA(State8080 *state)
+{
+    u8 *MemoryAddress = GetAddressMemory(state);
+    *MemoryAddress = state->a;
+    state->pc += 2;
 }
 
 int Emulate8080Op(State8080 *state)
@@ -657,11 +671,12 @@ int Emulate8080Op(State8080 *state)
 		// does not affect flags
 	} break;
 
-	case 0x31: LXI_SP(state); break; // @TODO
+	case 0x31: LXI_SP(state); break;
+	case 0x32: STA(state); break;	// STA addr
         case 0x33: ++state->sp; break;	// INX SP
         case 0x34: INR_M(state); break;	// INR M
 	case 0x35: DCR_M(state); break;	// DCR L
-	case 0x36: *memloc(state) = opcode[1]; state->pc++; break; // MVI M,D8
+	case 0x36: *MemoryLocation(state) = opcode[1]; state->pc++; break; // MVI M,D8
 	case 0x37: state->cc.cy = 1; break; // STC
 	// --
         case 0x39: DAD_RP(state, state->sp>>8, (state->sp & 0xFF)); break;	// DAD SP
@@ -669,6 +684,7 @@ int Emulate8080Op(State8080 *state)
         case 0x3B: --state->sp; break;	// DCX SP
         case 0x3c: process_flags_nc(state, ++state->a);break;	// INR A
 	case 0x3d: process_flags_nc(state, --state->a); break;	// DCR A
+	case 0x3E: state->a = opcode[1]; state->pc++; break;  // MVI A,D8
 	case 0x3F: // CMC
 	{
 	    state->cc.cy = (~state->cc.cy) & 1;
@@ -676,23 +692,24 @@ int Emulate8080Op(State8080 *state)
 	case 0x41: state->b = state->c; break;	// MOV B,C
 	case 0x42: state->b = state->d; break;	// MOV B,D
 	case 0x43: state->b = state->e; break;	// MOV B,E
-	case 0x5E: state->e = *memloc(state); break;	// MOV E,M
-	case 0x56: state->d = *memloc(state); break;	// MOV D,M
+	case 0x5E: state->e = *MemoryLocation(state); break;	// MOV E,M
+	case 0x56: state->d = *MemoryLocation(state); break;	// MOV D,M
 	case 0x6F: state->l = state->a; break;	// MOV L,A
-	case 0x66: state->h = *memloc(state); break;	// MOV H,M
+	case 0x66: state->h = *MemoryLocation(state); break;	// MOV H,M
+	case 0x72: *MemoryLocation(state) = state->d; break;	// MOV M,D
 	case 0x7C: state->a = state->h; break; // MOV A,H
 	case 0x76: HLT(state); break; // HLT
-	case 0x77: *memloc(state) = state->a; break; // MOV M,A
+	case 0x77: *MemoryLocation(state) = state->a; break; // MOV M,A
 	case 0x7A: state->a = state->d; break;	// MOV A,D
 	case 0x7B: state->a = state->e; break;	// MOV A,E
-	case 0x7E: state->a = *memloc(state); break;	// MOV A,M
+	case 0x7E: state->a = *MemoryLocation(state); break;	// MOV A,M
 	case 0x80: ADD(state, state->b); break; // ADD B
 	case 0x81: ADD(state, state->c); break; // ADD C
 	case 0x82: ADD(state, state->d); break; // ADD D
 	case 0x83: ADD(state, state->e); break; // ADD E
 	case 0x84: ADD(state, state->h); break; // ADD H
 	case 0x85: ADD(state, state->l); break; // ADD L
-	case 0x86: ADD(state, *memloc(state)); break; // ADD M
+	case 0x86: ADD(state, *MemoryLocation(state)); break; // ADD M
 	case 0x87: ADD(state, state->a); break; // ADD A
 	case 0x88: ADC(state, state->b); break; // ADC B
 	case 0x89: ADC(state, state->c); break; // ADC C
@@ -700,7 +717,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x8b: ADC(state, state->e); break; // ADC E
 	case 0x8c: ADC(state, state->h); break; // ADC H
 	case 0x8d: ADC(state, state->l); break; // ADC L
-	case 0x8e: ADC(state, *memloc(state)); break; // ADC M
+	case 0x8e: ADC(state, *MemoryLocation(state)); break; // ADC M
 	case 0x8f: ADC(state, state->a); break; // ADC A
 	case 0x90: SUB(state, state->a); break; // SUB B
 	case 0x91: SUB(state, state->c); break; // SUB C
@@ -708,7 +725,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x93: SUB(state, state->e); break; // SUB E
 	case 0x94: SUB(state, state->h); break; // SUB H
 	case 0x95: SUB(state, state->l); break; // SUB L
-	case 0x96: SUB(state, *memloc(state)); break; // SUB M
+	case 0x96: SUB(state, *MemoryLocation(state)); break; // SUB M
 	case 0x97: SUB(state, state->a); break; // SUB A
 	case 0x98: SBB(state, state->b); break; // SBB A
 	case 0x99: SBB(state, state->c); break; // SBB C
@@ -716,7 +733,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x9b: SBB(state, state->e); break; // SBB E
 	case 0x9c: SBB(state, state->h); break; // SBB H
 	case 0x9d: SBB(state, state->l); break; // SBB L
-	case 0x9e: SBB(state, *memloc(state)); break; // SBB M
+	case 0x9e: SBB(state, *MemoryLocation(state)); break; // SBB M
 	case 0x9f: SBB(state, state->a); break; // SBB A
 	case 0xA0: ANA(state, state->b); break; // ANA B
 	case 0xA1: ANA(state, state->c); break; // ANA C
@@ -724,7 +741,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xA3: ANA(state, state->e); break; // ANA E
 	case 0xA4: ANA(state, state->h); break; // ANA H
 	case 0xA5: ANA(state, state->l); break; // ANA L
-	case 0xA6: ANA(state, *memloc(state)); break; // ANA M
+	case 0xA6: ANA(state, *MemoryLocation(state)); break; // ANA M
 	case 0xA7: ANA(state, state->a); break; // ANA A
 	case 0xA8: XRA(state, state->b); break; // XRA B
 	case 0xA9: XRA(state, state->c); break; // XRA C
@@ -732,7 +749,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xAB: XRA(state, state->e); break; // XRA E
 	case 0xAC: XRA(state, state->h); break; // XRA H
 	case 0xAD: XRA(state, state->l); break; // XRA L
-	case 0xAE: XRA(state, *memloc(state)); break; // XRA M
+	case 0xAE: XRA(state, *MemoryLocation(state)); break; // XRA M
 	case 0xAF: XRA(state, state->a); break; // XRA A
 	case 0xB0: ORA(state, state->b); break; //ORA B
 	case 0xB1: ORA(state, state->c); break; //ORA C
@@ -740,7 +757,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xB3: ORA(state, state->e); break; //ORA E
 	case 0xB4: ORA(state, state->h); break; //ORA H
 	case 0xB5: ORA(state, state->l); break; //ORA L
-	case 0xB6: ORA(state, *memloc(state)); break; //ORA M
+	case 0xB6: ORA(state, *MemoryLocation(state)); break; //ORA M
 	case 0xB7: ORA(state, state->a); break; //ORA A
 	case 0xB8: CMP(state, state->b); break; // CMP B
 	case 0xB9: CMP(state, state->c); break; // CMP C
@@ -748,7 +765,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xBB: CMP(state, state->e); break; // CMP E
 	case 0xBC: CMP(state, state->h); break; // CMP H
 	case 0xBD: CMP(state, state->l); break; // CMP L
-	case 0xBE: CMP(state, *memloc(state)); break; // CMP M
+	case 0xBE: CMP(state, *MemoryLocation(state)); break; // CMP M
 	case 0xBF: CMP(state, state->a); break; // CMP A
 	case 0xC0: // RNZ
 	{
@@ -890,7 +907,9 @@ int Emulate8080Op(State8080 *state)
 	case 0xE9: // PCHL
 	{
 	    PCHL(state);
-	    return 0; // @TODO: update return value.
+
+	    // @TODO: why am i returning here?
+	    return 0;
 	} break;
 	case 0xEA:  // JPE addr (Parity == 1 == even)
 	{
@@ -901,8 +920,12 @@ int Emulate8080Op(State8080 *state)
 	} break;
 	case 0xEB: //XCHG
 	{
-	    state->h, state->d = state->d, state->h;
-	    state->l, state->e = state->e, state->l;
+	    u8 h = state->h;
+	    u8 l = state->l;
+	    state->h = state->d;
+	    state->l = state->e;
+	    state->d = h;
+	    state->e = l;
 	} break;
 	case 0xEC:  // CPE addr
 	{
