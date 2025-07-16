@@ -201,7 +201,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     InitCPU(&GlobalCPU);
     if(LoadROMFile(&GlobalCPU, "W:\\chip-8\\rom\\invaders") == 0)
     {
-	exit(1);
+		exit(1);
     }
 
     // @TODO: 60Hz limiting
@@ -211,14 +211,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	    Y < WindowHeight;
 	    ++Y)
     {
-	u32 *Pixel = (u32 *)Row;
-	for(int X=0;
-		X < WindowWidth;
-		++X)
-	{
-	    *Pixel++ = 0x00000000;
-	}
-	Row += GlobalBuffer.Pitch;
+		u32 *Pixel = (u32 *)Row;
+		for(int X=0;
+			X < WindowWidth;
+			++X)
+		{
+			*Pixel++ = 0x00000000;
+		}
+		Row += GlobalBuffer.Pitch;
     }
 
     GlobalRunning = 1;
@@ -243,8 +243,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	    u8 *GamePixelsToWin32 = (u8 *)calloc(1, GameBitmapSize);
 	    if (!GamePixelsToWin32)
 	    {
-		printf("[ERROR] failed to alloc\n");
-		exit(1);
+			printf("[ERROR] failed to alloc\n");
+			exit(1);
 	    }
 
 	    u32 *Pixel = (u32 *)GamePixelsToWin32;
@@ -252,26 +252,26 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		    Y < 224;
 		    ++Y)
 	    {
-		for(int X=0;
-			X < 256/8;
-			++X)
-		{
+			for(int X=0;
+				X < 256/8;
+				++X, ++VideoRAM)
+			{
 
-		    if((VideoRAM - GlobalCPU.memory) > 0x3FFF)
-		    {
-			printf("[ERROR] VideoRAM overflowed: 0x%x", (VideoRAM - GlobalCPU.memory));
-			exit(1);
-		    }
+				if((VideoRAM - GlobalCPU.memory) > 0x3FFF)
+				{
+					printf("[ERROR] VideoRAM overflowed: 0x%x", (VideoRAM - GlobalCPU.memory));
+					exit(1);
+				}
 
-		    for(int I=0;
-			    I<8;
-			    ++I)
-		    {
-			if((*VideoRAM >> I) & 1)
-			    *Pixel++ = 0x0000FF00;
-			else
-			    *Pixel++ = 0x00000000;
-		    }
+				for(int I=0;
+					I<8;
+					++I)
+				{
+					if((*VideoRAM >> I) & 1)
+						*Pixel++ = 0x0000FF00;
+					else
+						*Pixel++ = 0x00000000;
+				}
 
 #if 0
 				if (*VideoRAM != 0)
@@ -280,11 +280,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 						PrintBinary(*VideoRAM);
 				}
 #endif
-
-		    // @TODO: better location.
-		    VideoRAM += 1;
-
-		}
+			}
 	    }
 
 		u8 *Row = (u8 *)GlobalBuffer.Memory;
@@ -307,8 +303,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	    free(GamePixelsToWin32);
 
 	    Win32DisplayBufferInWindow(&GlobalBuffer, DeviceContext, WindowWidth, WindowHeight);
-	}
-
+		}
     }
 
     return 0;
