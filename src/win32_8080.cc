@@ -225,10 +225,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     // GlobalCPU.DebugPrint = 1;
     while(GlobalRunning)
     {
-	Win32ProcessPendingMessages();
-	Emulate8080Op(&GlobalCPU);
+		Win32ProcessPendingMessages();
+		Emulate8080Op(&GlobalCPU);
 
-	// @TODO: Sleep(MS) based on cycles elapsed.
+		// @TODO: Sleep(MS) based on cycles elapsed.
 
 	if((GlobalCPU.Steps%10000) == 0 || false)
 	{
@@ -268,17 +268,17 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 			    ++I)
 		    {
 			if((*VideoRAM >> I) & 1)
-			    *Pixel++ = 0xFF00FF00;
+			    *Pixel++ = 0x0000FF00;
 			else
 			    *Pixel++ = 0x00000000;
 		    }
 
 #if 0
-		    if (*VideoRAM != 0)
-		    {
-			printf("0x%x ", *VideoRAM);
-			PrintBinary(*VideoRAM);
-		    }
+				if (*VideoRAM != 0)
+				{
+						printf("0x%x ", *VideoRAM);
+						PrintBinary(*VideoRAM);
+				}
 #endif
 
 		    // @TODO: better location.
@@ -287,43 +287,22 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		}
 	    }
 
-
-	    u32 *Win32Pixel = (u32 *)GlobalBuffer.Memory;
-	    u32 *GamePixel = (u32 *)GamePixelsToWin32;
-	    u8 *Row = (u8 *)GlobalBuffer.Memory;
-	    for(int Y=0;
-		    Y<224;
-		    ++Y)
-	    {
-		u32 *Pixel = (u32 *)Row;
-		for(int X=0;
-			X<256;
-			++X)
+		u8 *Row = (u8 *)GlobalBuffer.Memory;
+		for(int X=256-1;
+				X>=0;
+				--X)
 		{
-		    *Pixel++ = *GamePixel++;
+			u32 *Pixel = (u32 *)Row;
+			for(int Y=0;
+					Y<224;
+					++Y)
+			{
+				// why the heck is it (Y*256*4) instead of (Y*244*4)?
+				u32 *GamePixel = (u32 *)(GamePixelsToWin32 + (X*4) + (Y*256*4));
+				*Pixel++ = *GamePixel;
+			}
+			Row += GlobalBuffer.Pitch;
 		}
-		Row += GlobalBuffer.Pitch;
-	    }
-
-	    // Rotate the GamePixels 90deg anticlockwise
-		//    u8 *Win32PixelRow = (u8 *)GlobalBuffer.Memory;
-		//    for(int X=256-1;
-		//     X>=0;
-		//     --X)
-		//    {
-		// u32 *Win32Pixel = (u32 *)Win32PixelRow;
-		// for(int Y=0;
-		// 	Y<224;
-		// 	++Y)
-		// {
-		//     u32 *GamePixel = (u32 *)(GamePixelsToWin32 + (Y*(224*4))) + (X*GlobalBuffer.BytesPerPixel);
-		//     *Win32Pixel = *GamePixel;
-		//     if (*Win32Pixel > 0)
-		// 	*Win32Pixel = 0xFFFF0000;
-		//     Win32Pixel++;
-		// }
-		// Win32PixelRow += GlobalBuffer.Pitch;
-		//    }
 
 	    free(GamePixelsToWin32);
 
