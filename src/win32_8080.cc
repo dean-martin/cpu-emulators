@@ -283,8 +283,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		}
 	    }
 
-	    int RX=0;
-	    int RY=0;
+	    // Rotate the GamePixels 90deg anticlockwise
+	    u32 *Win32Pixel = (u32 *)GlobalBuffer.Memory;
 	    for(int X=ScreenWidth-1;
 		    X>=0;
 		    --X)
@@ -294,13 +294,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 			++Y)
 		{
 		    u32 *Pixel = (u32 *)((u8*)GamePixelsToWin32 + (X*GlobalBuffer.BytesPerPixel) + (Y*GlobalBuffer.Pitch));
-		    u32 *TransposedPixel = (u32 *)((u8 *)GlobalBuffer.Memory + (RX++*GlobalBuffer.BytesPerPixel) + (RY*GlobalBuffer.Pitch));
-		    *TransposedPixel = *Pixel;
-		    if (*TransposedPixel > 0)
-			*TransposedPixel = 0xFFFF0000;
+		    *Win32Pixel = *Pixel;
+		    if (*Win32Pixel > 0)
+			*Win32Pixel = 0xFFFF0000;
+		    Win32Pixel++;
 		}
-		RY++;
-		RX = 0;
 	    }
 
 	    free(GamePixelsToWin32);
