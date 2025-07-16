@@ -221,6 +221,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		Row += GlobalBuffer.Pitch;
     }
 
+	u8 *VideoPixels = (u8 *)calloc(1, 256*224*8);
+	if (!VideoPixels)
+	{
+		printf("[ERROR] failed to alloc\n");
+		exit(1);
+	}
+
     GlobalRunning = 1;
     // GlobalCPU.DebugPrint = 1;
     while(GlobalRunning)
@@ -237,17 +244,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	    // The screens pixels are on/off (1 bit each). 256*224/8 = 7168 (7K) bytes.
 	    u8 *VideoRAM = GlobalCPU.memory + 0x2400;
 
-	    // @TODO: Move GamePixelsBuffer to a global, no need to reallocate so much.
-
-	    int GameBitmapSize = (256*224)*4;
-	    u8 *GamePixelsToWin32 = (u8 *)calloc(1, GameBitmapSize);
-	    if (!GamePixelsToWin32)
-	    {
-			printf("[ERROR] failed to alloc\n");
-			exit(1);
-	    }
-
-	    u32 *Pixel = (u32 *)GamePixelsToWin32;
+	    u32 *Pixel = (u32 *)VideoPixels;
 	    for(int Y=0;
 		    Y < 224;
 		    ++Y)
@@ -293,14 +290,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 					Y<224;
 					++Y)
 			{
-				// why the heck is it (Y*256*4) instead of (Y*244*4)?
-				u32 *GamePixel = (u32 *)(GamePixelsToWin32 + (X*4) + (Y*256*4));
+				u32 *GamePixel = (u32 *)(VideoPixels + (X*4) + (Y*256*4));
 				*Pixel++ = *GamePixel;
 			}
 			Row += GlobalBuffer.Pitch;
 		}
-
-	    free(GamePixelsToWin32);
 
 	    Win32DisplayBufferInWindow(&GlobalBuffer, DeviceContext, WindowWidth, WindowHeight);
 		}
