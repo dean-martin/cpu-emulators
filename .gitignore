@@ -5,3 +5,4 @@
 *.cod
 build/
 output/
+.vs/
