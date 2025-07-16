@@ -152,10 +152,8 @@ Win32ProcessPendingMessages()
     }
 }
 
-// The Height should actually be 256, and Width 224.
-// The game is written to 256x224, but suppose to be rotated 90deg anticlockwise.
-const int ScreenWidth = 256; // 256
-const int ScreenHeight = 256; // 224
+const int WindowWidth = 290;
+const int WindowHeight = 360;
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
@@ -179,7 +177,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         WS_OVERLAPPEDWINDOW|WS_VISIBLE,            // Window style
 
         // Size and position
-        CW_USEDEFAULT, CW_USEDEFAULT, ScreenWidth, ScreenHeight,
+        (GetSystemMetrics(SM_CXSCREEN)/2)-WindowWidth, (GetSystemMetrics(SM_CYSCREEN)/2)-WindowHeight,
+	 WindowWidth, WindowHeight,
 
         NULL,       // Parent window
         NULL,       // Menu
@@ -197,7 +196,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     HDC DeviceContext = GetDC(Window);
 
     // The raster resolution is 256x224 at 60Hz. The monitor is rotated in the cabinet 90 degrees counter-clockwise.
-    Win32ResizeDIBSection(&GlobalBuffer, ScreenWidth, ScreenHeight);
+    Win32ResizeDIBSection(&GlobalBuffer, WindowWidth, WindowHeight);
 
     InitCPU(&GlobalCPU);
     if(LoadROMFile(&GlobalCPU, "W:\\chip-8\\rom\\invaders") == 0)
@@ -209,12 +208,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
     u8 *Row = (u8 *) GlobalBuffer.Memory;
     for(int Y=0;
-	    Y < ScreenHeight;
+	    Y < WindowHeight;
 	    ++Y)
     {
 	u32 *Pixel = (u32 *)Row;
 	for(int X=0;
-		X < ScreenWidth;
+		X < WindowWidth;
 		++X)
 	{
 	    *Pixel++ = 0x00000000;
@@ -238,7 +237,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	    // The screens pixels are on/off (1 bit each). 256*224/8 = 7168 (7K) bytes.
 	    u8 *VideoRAM = GlobalCPU.memory + 0x2400;
 
-	    u8 *GamePixelsToWin32 = (u8 *)calloc(1, GlobalBuffer.MemorySize);
+	    // @TODO: Move GamePixelsBuffer to a global, no need to reallocate so much.
+
+	    int GameBitmapSize = (256*224)*4;
+	    u8 *GamePixelsToWin32 = (u8 *)calloc(1, GameBitmapSize);
 	    if (!GamePixelsToWin32)
 	    {
 		printf("[ERROR] failed to alloc\n");
@@ -279,31 +281,53 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		    }
 #endif
 
+		    // @TODO: better location.
 		    VideoRAM += 1;
+
 		}
+	    }
+
+
+	    u32 *Win32Pixel = (u32 *)GlobalBuffer.Memory;
+	    u32 *GamePixel = (u32 *)GamePixelsToWin32;
+	    u8 *Row = (u8 *)GlobalBuffer.Memory;
+	    for(int Y=0;
+		    Y<224;
+		    ++Y)
+	    {
+		u32 *Pixel = (u32 *)Row;
+		for(int X=0;
+			X<256;
+			++X)
+		{
+		    *Pixel++ = *GamePixel++;
+		}
+		Row += GlobalBuffer.Pitch;
 	    }
 
 	    // Rotate the GamePixels 90deg anticlockwise
-	    u32 *Win32Pixel = (u32 *)GlobalBuffer.Memory;
-	    for(int X=ScreenWidth-1;
-		    X>=0;
-		    --X)
-	    {
-		for(int Y=0;
-			Y<ScreenHeight;
-			++Y)
-		{
-		    u32 *Pixel = (u32 *)((u8*)GamePixelsToWin32 + (X*GlobalBuffer.BytesPerPixel) + (Y*GlobalBuffer.Pitch));
-		    *Win32Pixel = *Pixel;
-		    if (*Win32Pixel > 0)
-			*Win32Pixel = 0xFFFF0000;
-		    Win32Pixel++;
-		}
-	    }
+		//    u8 *Win32PixelRow = (u8 *)GlobalBuffer.Memory;
+		//    for(int X=256-1;
+		//     X>=0;
+		//     --X)
+		//    {
+		// u32 *Win32Pixel = (u32 *)Win32PixelRow;
+		// for(int Y=0;
+		// 	Y<224;
+		// 	++Y)
+		// {
+		//     u32 *GamePixel = (u32 *)(GamePixelsToWin32 + (Y*(224*4))) + (X*GlobalBuffer.BytesPerPixel);
+		//     *Win32Pixel = *GamePixel;
+		//     if (*Win32Pixel > 0)
+		// 	*Win32Pixel = 0xFFFF0000;
+		//     Win32Pixel++;
+		// }
+		// Win32PixelRow += GlobalBuffer.Pitch;
+		//    }
 
 	    free(GamePixelsToWin32);
 
-	    Win32DisplayBufferInWindow(&GlobalBuffer, DeviceContext, ScreenWidth, ScreenHeight);
+	    Win32DisplayBufferInWindow(&GlobalBuffer, DeviceContext, WindowWidth, WindowHeight);
 	}
 
     }
