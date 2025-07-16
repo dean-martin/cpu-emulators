@@ -247,8 +247,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		    exit(1);
 		}
 
-		for(int I=1;
-			I<=8;
+		for(int I=0;
+			I<8;
 			++I)
 		{
 		    if((*VideoRAM >> I) & 1)
