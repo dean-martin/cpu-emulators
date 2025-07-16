@@ -152,6 +152,8 @@ Win32ProcessPendingMessages()
     }
 }
 
+// The Height should actually be 256, and Width 224.
+// The game is written to 256x224, but suppose to be rotated 90deg anticlockwise.
 const int Width = 256; // 256
 const int Height = 256; // 224
 
