@@ -228,103 +228,84 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     {
 	Win32ProcessPendingMessages();
 	Emulate8080Op(&GlobalCPU);
-	// @TODO: timing based on cycles?
-	// if((GlobalCPU.Steps%1000) == 0)
-	// {
-	//     Sleep(1.0f);
-	// }
-	// @see: https://computerarcheology.com/Arcade/SpaceInvaders/Hardware.html
-	// NOTE: Video RAM is 2400-3FFF
-	// The screens pixels are on/off (1 bit each). 256*224/8 = 7168 (7K) bytes.
-	u8 *VideoRAM = GlobalCPU.memory + 0x2400;
 
-	// @TODO: Slowly redrawing the screen gives a cool effect and slows down the CPU.
-	// Should Sleep(MS) instead but this is amusing.
-	if((GlobalCPU.Steps%10000) ==0 || false)
+	// @TODO: Sleep(MS) based on cycles elapsed.
+
+	if((GlobalCPU.Steps%10000) == 0 || false)
 	{
-	u8 *Row = (u8 *) GlobalBuffer.Memory;
-	for(int Y=0;
-		Y < 224;
-		++Y)
-	{
-	    u32 *Pixel = (u32 *)Row;
-	    for(int X=0;
-		    X < 256/8;
-		    ++X)
+	    // @see: https://computerarcheology.com/Arcade/SpaceInvaders/Hardware.html
+	    // NOTE: Video RAM is 2400-3FFF
+	    // The screens pixels are on/off (1 bit each). 256*224/8 = 7168 (7K) bytes.
+	    u8 *VideoRAM = GlobalCPU.memory + 0x2400;
+
+	    u8 *GamePixelsToWin32 = (u8 *)calloc(1, GlobalBuffer.MemorySize);
+	    if (!GamePixelsToWin32)
 	    {
-
-		if((VideoRAM - GlobalCPU.memory) > 0x3FFF)
-		{
-		    printf("[ERROR] VideoRAM overflowed: 0x%x", (VideoRAM - GlobalCPU.memory));
-		    exit(1);
-		}
-
-		// @TODO: How to rotate 90deg?
-		// i learned the maffs for this, rotating a point around an origin.
-		// it'd be swapping the X and Y, and changing signs.
-		for(int I=0;
-			I<8;
-			++I)
-		{
-		    if((*VideoRAM >> I) & 1)
-			*Pixel++ = 0xFF00FF00;
-		    else
-			*Pixel++ = 0x00000000;
-		}
-
-#if 0
-		if (*VideoRAM != 0)
-		{
-		    printf("0x%x ", *VideoRAM);
-		    PrintBinary(*VideoRAM);
-		}
-#endif
-
-		VideoRAM += 1;
+		printf("[ERROR] failed to alloc\n");
+		exit(1);
 	    }
-	    Row += GlobalBuffer.Pitch;
-	}
 
-#if 1
-	{
-
-	    // rotating this is gonna be weird because the col and row sizes are different...
-	    // that must have been the issue, ahhh
-	    // THAT WAS THE ISSUE, THE _WHOLE_ TIME.
-	    // i knew the logic checked out.
-	u8 *NewBuffer = (u8 *) calloc(1, GlobalBuffer.MemorySize);
-	int RX=0;
-	int RY=0;
-	for(int X=ScreenWidth-1;
-		X>=0;
-		--X)
-	{
+	    u32 *Pixel = (u32 *)GamePixelsToWin32;
 	    for(int Y=0;
-		    Y<ScreenHeight;
+		    Y < 224;
 		    ++Y)
 	    {
-		u32 *Pixel = (u32 *)((u8*)GlobalBuffer.Memory + (X*GlobalBuffer.BytesPerPixel) + (Y*GlobalBuffer.Pitch));
-		u32 *TransposedPixel = (u32 *)(NewBuffer + (RX++*GlobalBuffer.BytesPerPixel) + (RY*GlobalBuffer.Pitch));
-		*TransposedPixel = *Pixel;
-		if (*TransposedPixel > 0)
-		    *TransposedPixel = 0xFFFF0000;
-	    }
-	    RY++;
-	    RX = 0;
-	}
+		for(int X=0;
+			X < 256/8;
+			++X)
+		{
 
-	for(int I=0;
-		I<GlobalBuffer.MemorySize;
-		++I)
-	{
-	    u8 *Buffer = (u8 *)GlobalBuffer.Memory;
-	    *(Buffer+I) = *(NewBuffer+I);
-	}
-	free(NewBuffer);
-	}
+		    if((VideoRAM - GlobalCPU.memory) > 0x3FFF)
+		    {
+			printf("[ERROR] VideoRAM overflowed: 0x%x", (VideoRAM - GlobalCPU.memory));
+			exit(1);
+		    }
+
+		    for(int I=0;
+			    I<8;
+			    ++I)
+		    {
+			if((*VideoRAM >> I) & 1)
+			    *Pixel++ = 0xFF00FF00;
+			else
+			    *Pixel++ = 0x00000000;
+		    }
+
+#if 0
+		    if (*VideoRAM != 0)
+		    {
+			printf("0x%x ", *VideoRAM);
+			PrintBinary(*VideoRAM);
+		    }
 #endif
 
-	Win32DisplayBufferInWindow(&GlobalBuffer, DeviceContext, ScreenWidth, ScreenHeight);
+		    VideoRAM += 1;
+		}
+	    }
+
+	    int RX=0;
+	    int RY=0;
+	    for(int X=ScreenWidth-1;
+		    X>=0;
+		    --X)
+	    {
+		for(int Y=0;
+			Y<ScreenHeight;
+			++Y)
+		{
+		    u32 *Pixel = (u32 *)((u8*)GamePixelsToWin32 + (X*GlobalBuffer.BytesPerPixel) + (Y*GlobalBuffer.Pitch));
+		    u32 *TransposedPixel = (u32 *)((u8 *)GlobalBuffer.Memory + (RX++*GlobalBuffer.BytesPerPixel) + (RY*GlobalBuffer.Pitch));
+		    *TransposedPixel = *Pixel;
+		    if (*TransposedPixel > 0)
+			*TransposedPixel = 0xFFFF0000;
+		}
+		RY++;
+		RX = 0;
+	    }
+
+	    free(GamePixelsToWin32);
+
+	    Win32DisplayBufferInWindow(&GlobalBuffer, DeviceContext, ScreenWidth, ScreenHeight);
 	}
 
     }
