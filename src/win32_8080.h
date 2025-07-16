@@ -34,6 +34,8 @@ typedef struct win32_buffer
     BITMAPINFO Info;
 
     void *Memory;
+    int MemorySize;
+
     int Width;
     int Height;
     int Pitch;

@@ -35,6 +35,7 @@ Win32ResizeDIBSection(win32_buffer *Buffer, int Width, int Height)
     Buffer->Info.bmiHeader.biCompression = BI_RGB;
 
     int BitmapMemorySize = (Buffer->Width*Buffer->Height)*BytesPerPixel;
+    Buffer->MemorySize = BitmapMemorySize;
     Buffer->Memory = VirtualAlloc(0, BitmapMemorySize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
     Buffer->Pitch = Width*BytesPerPixel;
 }
@@ -110,10 +111,15 @@ Win32ProcessPendingMessages()
                     {
 			// @TODO: Implement!
                     }
+                    else if(VKCode == 'Q')
+                    {
+			GlobalRunning = false;
+			printf("bye bye");
+                    }
                     else if(VKCode == VK_ESCAPE)
                     {
 			GlobalRunning = false;
-			printf("bye ");
+			printf("bye bye");
                     }
                     else if(VKCode == VK_SPACE)
                     {
@@ -146,6 +152,13 @@ Win32ProcessPendingMessages()
     }
 }
 
+const int Width = 256; // 256
+const int Height = 256; // 224
+
+void RotatePixels(u32 *Pixels)
+{
+}
+
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
     // Register the window class.
@@ -165,10 +178,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         0,                              // Optional window styles.
         CLASS_NAME,                     // Window class
         L"Space Invaders Emulator",    // Window text
-        WS_OVERLAPPEDWINDOW,            // Window style
+        WS_OVERLAPPEDWINDOW|WS_VISIBLE,            // Window style
 
         // Size and position
-        CW_USEDEFAULT, CW_USEDEFAULT, 256, 256,
+        CW_USEDEFAULT, CW_USEDEFAULT, Width, Height,
 
         NULL,       // Parent window
         NULL,       // Menu
@@ -185,11 +198,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
     HDC DeviceContext = GetDC(Window);
 
-    // Run the message loop.
     // The raster resolution is 256x224 at 60Hz. The monitor is rotated in the cabinet 90 degrees counter-clockwise.
-    int Width = 256;
-    int Height = 224;
-    Win32ResizeDIBSection(&GlobalBuffer, 256, 224);
+    Win32ResizeDIBSection(&GlobalBuffer, Width, Height);
 
     InitCPU(&GlobalCPU);
     if(LoadROMFile(&GlobalCPU, "W:\\chip-8\\rom\\invaders") == 0)
@@ -230,9 +240,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	// The screens pixels are on/off (1 bit each). 256*224/8 = 7168 (7K) bytes.
 	u8 *VideoRAM = GlobalCPU.memory + 0x2400;
 
+	// @TODO: Slowly redrawing the screen gives a cool effect and slows down the CPU.
+	// Should Sleep(MS) instead but this is amusing.
+	if((GlobalCPU.Steps%10000) ==0 || false)
+	{
 	u8 *Row = (u8 *) GlobalBuffer.Memory;
 	for(int Y=0;
-		Y < Height;
+		Y < 224; // hardcoding for now
 		++Y)
 	{
 	    u32 *Pixel = (u32 *)Row;
@@ -247,6 +261,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		    exit(1);
 		}
 
+		// @TODO: How to rotate 90deg?
+		// i learned the maffs for this, rotating a point around an origin.
+		// it'd be swapping the X and Y, and changing signs.
 		for(int I=0;
 			I<8;
 			++I)
@@ -270,7 +287,48 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	    Row += GlobalBuffer.Pitch;
 	}
 
+#if 1
+	{
+
+	    // rotating this is gonna be weird because the col and row sizes are different...
+	    // that must have been the issue, ahhh
+	    // THAT WAS THE ISSUE, THE _WHOLE_ TIME.
+	    // i knew the logic checked out.
+	u8 *NewBuffer = (u8 *) calloc(1, GlobalBuffer.MemorySize);
+	int RX=0;
+	int RY=0;
+	for(int X=Width-1;
+		X>=0;
+		--X)
+	{
+	    for(int Y=0;
+		    Y<Height;
+		    ++Y)
+	    {
+		u32 *Pixel = (u32 *)((u8*)GlobalBuffer.Memory + (X*GlobalBuffer.BytesPerPixel) + (Y*GlobalBuffer.Pitch));
+		u32 *TransposedPixel = (u32 *)(NewBuffer + (RX++*GlobalBuffer.BytesPerPixel) + (RY*GlobalBuffer.Pitch));
+		*TransposedPixel = *Pixel;
+		if (*TransposedPixel > 0)
+		    *TransposedPixel = 0xFFFF0000;
+	    }
+	    RY++;
+	    RX = 0;
+	}
+
+	for(int I=0;
+		I<GlobalBuffer.MemorySize;
+		++I)
+	{
+	    u8 *Buffer = (u8 *)GlobalBuffer.Memory;
+	    *(Buffer+I) = *(NewBuffer+I);
+	}
+	free(NewBuffer);
+	}
+#endif
+
 	Win32DisplayBufferInWindow(&GlobalBuffer, DeviceContext, Width, Height);
+	}
+
     }
 
     return 0;
