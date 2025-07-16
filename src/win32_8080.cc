@@ -154,12 +154,8 @@ Win32ProcessPendingMessages()
 
 // The Height should actually be 256, and Width 224.
 // The game is written to 256x224, but suppose to be rotated 90deg anticlockwise.
-const int Width = 256; // 256
-const int Height = 256; // 224
-
-void RotatePixels(u32 *Pixels)
-{
-}
+const int ScreenWidth = 256; // 256
+const int ScreenHeight = 256; // 224
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
@@ -183,7 +179,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         WS_OVERLAPPEDWINDOW|WS_VISIBLE,            // Window style
 
         // Size and position
-        CW_USEDEFAULT, CW_USEDEFAULT, Width, Height,
+        CW_USEDEFAULT, CW_USEDEFAULT, ScreenWidth, ScreenHeight,
 
         NULL,       // Parent window
         NULL,       // Menu
@@ -201,7 +197,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     HDC DeviceContext = GetDC(Window);
 
     // The raster resolution is 256x224 at 60Hz. The monitor is rotated in the cabinet 90 degrees counter-clockwise.
-    Win32ResizeDIBSection(&GlobalBuffer, Width, Height);
+    Win32ResizeDIBSection(&GlobalBuffer, ScreenWidth, ScreenHeight);
 
     InitCPU(&GlobalCPU);
     if(LoadROMFile(&GlobalCPU, "W:\\chip-8\\rom\\invaders") == 0)
@@ -213,12 +209,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
     u8 *Row = (u8 *) GlobalBuffer.Memory;
     for(int Y=0;
-	    Y < Height;
+	    Y < ScreenHeight;
 	    ++Y)
     {
 	u32 *Pixel = (u32 *)Row;
 	for(int X=0;
-		X < Width;
+		X < ScreenWidth;
 		++X)
 	{
 	    *Pixel++ = 0x00000000;
@@ -248,12 +244,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	{
 	u8 *Row = (u8 *) GlobalBuffer.Memory;
 	for(int Y=0;
-		Y < 224; // hardcoding for now
+		Y < 224;
 		++Y)
 	{
 	    u32 *Pixel = (u32 *)Row;
 	    for(int X=0;
-		    X < Width/8;
+		    X < 256/8;
 		    ++X)
 	    {
 
@@ -299,12 +295,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	u8 *NewBuffer = (u8 *) calloc(1, GlobalBuffer.MemorySize);
 	int RX=0;
 	int RY=0;
-	for(int X=Width-1;
+	for(int X=ScreenWidth-1;
 		X>=0;
 		--X)
 	{
 	    for(int Y=0;
-		    Y<Height;
+		    Y<ScreenHeight;
 		    ++Y)
 	    {
 		u32 *Pixel = (u32 *)((u8*)GlobalBuffer.Memory + (X*GlobalBuffer.BytesPerPixel) + (Y*GlobalBuffer.Pitch));
@@ -328,7 +324,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	}
 #endif
 
-	Win32DisplayBufferInWindow(&GlobalBuffer, DeviceContext, Width, Height);
+	Win32DisplayBufferInWindow(&GlobalBuffer, DeviceContext, ScreenWidth, ScreenHeight);
 	}
 
     }
