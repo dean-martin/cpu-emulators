@@ -377,14 +377,14 @@ inline void
 IN(State8080 *state)
 {
     // @TODO: implement
-    state->pc++;
+    state->pc+=2;
 }
 
 inline void
 OUT(State8080 *state)
 {
     // @TODO: implement
-    state->pc++;
+    state->pc+=2;
 }
 
 inline void

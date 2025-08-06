@@ -1,7 +1,5 @@
 #include "win32_8080.h"
 
-// @TODO: run the emulator, copy pixels from RAM (to our buffer) and blit to screen.
-
 global_variable bool GlobalRunning;
 global_variable bool GlobalPause;
 global_variable win32_buffer GlobalBuffer;
@@ -45,10 +43,6 @@ Win32DisplayBufferInWindow(win32_buffer *Buffer,
                            HDC DeviceContext, int WindowWidth, int WindowHeight)
 {
     StretchDIBits(DeviceContext,
-                  /*
-                  X, Y, Width, Height,
-                  X, Y, Width, Height,
-                  */
                   0, 0, WindowWidth, WindowHeight,
                   0, 0, Buffer->Width, Buffer->Height,
                   Buffer->Memory,
@@ -201,10 +195,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     InitCPU(&GlobalCPU);
     if(LoadROMFile(&GlobalCPU, "W:\\chip-8\\rom\\invaders") == 0)
     {
+
 		exit(1);
     }
 
-    // @TODO: 60Hz limiting
+    // @TODO: 60Hz limiting?
 
     u8 *Row = (u8 *) GlobalBuffer.Memory;
     for(int Y=0;
@@ -224,20 +219,72 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	u8 *VideoPixels = (u8 *)calloc(1, 256*224*8);
 	if (!VideoPixels)
 	{
-		printf("[ERROR] failed to alloc\n");
+		printf("[ERROR] failed to alloc VideoPixels\n");
 		exit(1);
 	}
 
     GlobalRunning = 1;
     // GlobalCPU.DebugPrint = 1;
+	// 16bit
+	// @see: https://computerarcheology.com/Arcade/SpaceInvaders/Hardware.html#dedicated-shift-hardware
+	local_persist u16 x16;
+	local_persist u16 y16;
+	local_persist u8 ShiftOffset;
     while(GlobalRunning)
     {
 		Win32ProcessPendingMessages();
-		Emulate8080Op(&GlobalCPU);
+
+		u8 *opcode = &GlobalCPU.memory[GlobalCPU.pc];
+		if (*opcode == 0xDB) // IN
+		{
+			u8 port = opcode[1];
+			switch(port)
+			{
+				case 1:
+				{
+					GlobalCPU.a = 0b00001101;
+					GlobalCPU.a = 1;
+				} break;
+				case 2:
+				{
+					GlobalCPU.a = 0;
+				} break;
+				case 3:
+				{
+					u16 value = (x16 << 8) | y16;
+					GlobalCPU.a = ((value >> (8-ShiftOffset) & 0xFF));
+				} break;
+			}
+			GlobalCPU.pc += 2;
+		}
+		else if (*opcode == 0xD3) // OUT
+		{
+
+			u8 port = opcode[1];
+			switch(port)
+			{
+				// Writing to port 2 (bits 0,1,2) sets the offset for the 8 bit result, eg.
+				case 2:
+				{
+					ShiftOffset = ((x16 << 8) | y16) & 0x7;
+				} break;
+				// Writing to port 4 shifts x into y, and the new value into x, eg.
+				case 4:
+				{
+					y16 = x16;
+					x16 = *opcode;
+				} break;
+			}
+			// @TODO:
+			GlobalCPU.pc += 2;
+		}
+		else
+			Emulate8080Op(&GlobalCPU);
+
 
 		// @TODO: Sleep(MS) based on cycles elapsed.
 
-	if((GlobalCPU.Steps%10000) == 0 || false)
+	if((GlobalCPU.Steps%10000) == 0)
 	{
 	    // @see: https://computerarcheology.com/Arcade/SpaceInvaders/Hardware.html
 	    // NOTE: Video RAM is 2400-3FFF
@@ -335,10 +382,6 @@ LRESULT CALLBACK WindowProc(HWND Window, UINT uMsg, WPARAM wParam, LPARAM lParam
 
             win32_window_dimension Dimension = Win32GetWindowDimension(Window);
 	    StretchDIBits(hdc,
-			  /*
-			  X, Y, Width, Height,
-			  X, Y, Width, Height,
-			  */
 			  0, 0, Dimension.Width, Dimension.Height,
 			  0, 0, GlobalBuffer.Width, GlobalBuffer.Height,
 			  GlobalBuffer.Memory,
