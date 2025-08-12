@@ -26,7 +26,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         exit(1);
     }
 
-    VideoPixels = (u8 *)calloc(1, 256*224*8);
+    VideoPixels = (u8 *)calloc(1, 256*224);
     if (!VideoPixels)
     {
         printf("[ERROR] failed to alloc VideoPixels\n");
@@ -60,7 +60,8 @@ SDL_AppResult SDL_AppIterate(void *appstate)
         // The screens pixels are on/off (1 bit each). 256*224/8 = 7168 (7K) bytes.
         u8 *VideoRAM = GlobalCPU.memory + 0x2400;
 
-        u32 *Pixel = (u32 *)VideoPixels;
+        // @TODO: don't use u8 for a 1 bit value.
+        u8 *Pixel = (u8 *)VideoPixels;
         for(int Y=0;
                 Y < 224;
                 ++Y)
@@ -80,9 +81,9 @@ SDL_AppResult SDL_AppIterate(void *appstate)
                         ++I)
                 {
                         if((*VideoRAM >> I) & 1)
-                                *Pixel++ = 0x0000FF00;
+                                *Pixel++ = 1;
                         else
-                                *Pixel++ = 0x00000000;
+                                *Pixel++ = 0;
                 }
 
 #if 0
@@ -103,19 +104,18 @@ SDL_AppResult SDL_AppIterate(void *appstate)
         int Y2 = 0;
         for(int X=256-1;
                 X>=0;
-                --X, ++Y2)
+                --X, ++Y2, X2=0)
         {
             for(int Y=0;
                     Y<224;
                     ++Y, X2++)
             {
-                u32 *GamePixel = (u32 *)(VideoPixels + (X*4) + (Y*256*4));
+                u8 *GamePixel = (u8 *)(VideoPixels + (X) + (Y*256));
                 if (*GamePixel)
                 {
                     SDL_RenderPoint(renderer, X2, Y2);
                 }
             }
-            X2 = 0;
         }
 
         SDL_RenderPresent(renderer);
