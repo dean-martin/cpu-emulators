@@ -97,22 +97,27 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
+
         SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+        int X2 = 0;
+        int Y2 = 0;
         for(int X=256-1;
                 X>=0;
-                --X)
+                --X, ++Y2)
         {
             for(int Y=0;
                     Y<224;
-                    ++Y)
+                    ++Y, X2++)
             {
                 u32 *GamePixel = (u32 *)(VideoPixels + (X*4) + (Y*256*4));
                 if (*GamePixel)
                 {
-                    SDL_RenderPoint(renderer, X, Y);
+                    SDL_RenderPoint(renderer, X2, Y2);
                 }
             }
+            X2 = 0;
         }
+
         SDL_RenderPresent(renderer);
     }
 
