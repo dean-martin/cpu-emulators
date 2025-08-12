@@ -60,10 +60,11 @@ int Disassemble8080Op(unsigned char *buffer, int pc);
 int Emulate8080Op(State8080 *state);
 int LoadROMFile(State8080 *state, char *FileName);
 
-void InitCPU(State8080 *CPU)
+bool InitCPU(State8080 *CPU)
 {
     // 16kb memory
     CPU->memory = (u8 *) calloc(1, 16*1024LL);
+    return CPU->memory != NULL;
 }
 
 
@@ -377,14 +378,16 @@ inline void
 IN(State8080 *state)
 {
     // @TODO: implement
-    state->pc+=2;
+    state->pc++;
+    //state->pc+=2;
 }
 
 inline void
 OUT(State8080 *state)
 {
     // @TODO: implement
-    state->pc+=2;
+    state->pc++;
+    //state->pc+=2;
 }
 
 inline void
