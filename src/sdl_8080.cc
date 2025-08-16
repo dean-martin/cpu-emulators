@@ -5,6 +5,8 @@
 #include <time.h>
 
 global_variable State8080 GlobalCPU;
+global_variable u16 GlobalShiftRegister;
+global_variable u8 GlobalShiftOffset;
 
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
@@ -13,43 +15,6 @@ u8 *VideoPixels = NULL;
 const int WindowWidth = 290;
 const int WindowHeight = 360;
 
-static time_t lastInterrupt;
-
-// @see: https://www.computerarcheology.com/Arcade/SpaceInvaders/Hardware.html
-/*
-   Ports:
-    Read 1
-    BIT 0   coin (0 when active)
-        1   P2 start button
-        2   P1 start button
-        3   ?    
-        4   P1 shoot button    
-        5   P1 joystick left    
-        6   P1 joystick right    
-        7   ?    
-
-    Read 2    
-    BIT 0,1 dipswitch number of lives (0:3,1:4,2:5,3:6)    
-        2   tilt 'button'    
-        3   dipswitch bonus life at 1:1000,0:1500    
-        4   P2 shoot button    
-        5   P2 joystick left    
-        6   P2 joystick right    
-        7   dipswitch coin info 1:off,0:on    
-
-    Read 3      shift register result    
-
-    Write 2     shift register result offset (bits 0,1,2)    
-    Write 3     sound related    
-    Write 4     fill shift register    
-    Write 5     sound related    
-    Write 6     strange 'debug' port? eg. it writes to this port when    
-            it writes text to the screen (0=a,1=b,2=c, etc)    
-
-    (write ports 3,5,6 can be left unemulated, read port 1=$01 and 2=$00    
-    will make the game run, but but only in attract mode)    
-*/
-
 // @see: https://www.computerarcheology.com/Arcade/SpaceInvaders/Hardware.html#inputs
 static u8 ports[8+1] = {
 	0b00001110, // Port 0
@@ -57,8 +22,7 @@ static u8 ports[8+1] = {
 	0b10000000, // Port 2
 };
 
-static u16 shift_register;
-static u8 shift_offset;
+void RenderScreen();
 
 /* This function runs once at startup. */
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
@@ -74,7 +38,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         exit(1);
     }
 
-    VideoPixels = (u8 *) calloc(1, 256*224);
+	// @TODO: review sizing later
+    VideoPixels = (u8 *) calloc(4, 256*224);
     if (!VideoPixels)
     {
         printf("[ERROR] failed to alloc VideoPixels\n");
@@ -113,6 +78,7 @@ void GenerateInterrupt(State8080 *cpu, int interrupt_num)
 {
 	PUSH_PC(&GlobalCPU);
 	cpu->pc = 8 * interrupt_num;
+	// simulate DI
 	GlobalCPU.interrupt_enabled = 0;
 }
 
@@ -127,7 +93,7 @@ u8 MachineIN(State8080 *cpu, u8 port)
 
 	if (port == 3)
 	{
-		return ((shift_register >> (8-shift_offset)) & 0xFF);
+		return ((GlobalShiftRegister >> (8-GlobalShiftOffset)) & 0xFF);
 	}
 	return ports[port];
 }
@@ -138,23 +104,23 @@ void MachineOUT(State8080 *cpu, u8 port)
 		SDL_Log("OUT: Port: %d", port);
 	if (port == 2)
 	{
-		shift_offset = cpu->a & 0x7; 
+		GlobalShiftOffset = cpu->a & 0x7;
 	}
 	if (port == 4)
 	{
-		shift_register = (cpu->a << 8) | (shift_register >> 8);
+		GlobalShiftRegister = (cpu->a << 8) | (GlobalShiftRegister >> 8);
 	}
 	ports[port] = cpu->a;
 }
 
-static time_t lastRender;
-void RenderScreen();
-
-static bool last = true;
 
 /* This function runs once per frame, and is the heart of the program. */
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
+	local_persist time_t LastRenderTime;
+	local_persist time_t LastInterruptTime;
+	local_persist bool AlternateInterrupt;
+
     // SDL_Delay(0.1);
     // GlobalCPU.DebugPrint = 1;
 	u8 *opcode = &GlobalCPU.memory[GlobalCPU.pc];
@@ -173,43 +139,35 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	else 
 		Emulate8080Op(&GlobalCPU);
 
-	// @TODO: This hack timing would work properly with rendering.
-	if (time(NULL) - lastInterrupt > 1.0/60.0) // 1/60 seconds has elapsed
+	time_t now = time(NULL);
+
+	if ((now - LastInterruptTime > 1.0/60.0) && GlobalCPU.interrupt_enabled)
 	{
-		if (GlobalCPU.interrupt_enabled)
-		{
-			if (last){
-				GenerateInterrupt(&GlobalCPU, 2); // Interrupt "0x10"
-			} else {
-				GenerateInterrupt(&GlobalCPU, 1); // Interrupt "0x8"
-			}
-			last = !last;
-			lastInterrupt = time(NULL);
-		}
+		if (AlternateInterrupt)
+			GenerateInterrupt(&GlobalCPU, 2); // Interrupt "0x10"
+		else
+			GenerateInterrupt(&GlobalCPU, 1); // Interrupt "0x8"
+		AlternateInterrupt = !AlternateInterrupt;
+		LastInterruptTime = time(NULL);
 	}
 
-	if(time(NULL) - lastRender > 1.0/60.0)
+	if(now - LastRenderTime > 1.0/60.0)
     {
 		RenderScreen();
-		lastRender = time(NULL);
+		LastRenderTime = time(NULL);
     }
 
     return SDL_APP_CONTINUE;
 }
 
-// This does a full render at once, maybe I should do a per frame rendering?
-// This would align more with how the hardware actually works...
 void RenderScreen()
 {
-	// SDL_Log("rendering");
 	// @see: https://computerarcheology.com/Arcade/SpaceInvaders/Hardware.html
 	// NOTE: Video RAM is 2400-3FFF
 	// The screens pixels are on/off (1 bit each). 256*224/8 = 7168 (7K) bytes.
 	u8 *VideoRAM = GlobalCPU.memory + 0x2400;
 
-	// @TODO: don't write into separate buffer?
-
-	// @TODO: don't use u8 for a 1 bit value.
+	// @TODO: Don't write into separate buffer.
 	u8 *Pixel = (u8 *)VideoPixels;
 	for(int Y=0; Y < 224; ++Y)
 	{
