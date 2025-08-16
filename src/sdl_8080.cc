@@ -65,12 +65,78 @@ void GenerateInterupt(State8080 *cpu, int interrupt_num)
 
 static time_t lastInterrupt;
 
+u8 MachineIN(State8080 *cpu, u8 port)
+{
+	u8 a;
+	switch(port)
+	{
+		case 3:
+		{
+			u16 v = (shift1<<8) | shift0;
+			a = ((v >> (8-shift_offset)) & 0xFF);
+		} break;
+	}
+	return a;
+}
+
+void MachineOUT(u8 port, u8 value)
+{
+	switch(port)
+	{
+		case 2:
+		{
+			shift_offset = value & 0x7;
+		} break;
+		case 4:
+		{
+			shift0 = shift1;
+			shift1 = value;
+		} break;
+	}
+}
+
+void MachineKeyUp(u8 dir)
+{
+	// @TODO:
+}
+void MachineKeyDown(u8 dir)
+{
+	// @TODO:
+	switch(dir)
+	{
+		case LEFT:
+		{
+			port[1] = 0x20; // set bit 5 of port 1
+		} break;
+		case RIGHT:
+		{
+			port[1] = 0x40; // set bit 6 of port 1
+		} break;
+	}
+}
+
 /* This function runs once per frame, and is the heart of the program. */
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
     // SDL_Delay(0.001);
     // GlobalCPU.DebugPrint = 1;
-    Emulate8080Op(&GlobalCPU);
+	u8 opcode = state->memory[state->[pc];
+	if (*opcode == 0xDB) // IN
+	{
+		u8 port = opcode[1];
+		GlobalCPU.a = MachineIN(&GlobalCPU, port);
+		GlobalCPU.pc++;
+	}
+	else if (*opcode == 0xD3) // OUT
+	{
+		u8 port = opcode[1];
+		MachineOUT(&GlobalCPU, port);
+		GlobalCPU.pc++;
+	}
+	else 
+	{
+		Emulate8080Op(&GlobalCPU);
+	}
 
 	if (time(NULL) - lastInterrupt > 0) // 1/60 seconds has elapsed
 	{
@@ -80,6 +146,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			lastInterrupt = time(NULL);
 		}
 	}
+
 
 	// @TODO: Timing, Proper video refresh rate and pixel refreshing
 	// @see: https://web.archive.org/web/20241011062657/http://www.emulator101.com/displays-and-refresh.html
