@@ -446,6 +446,14 @@ PUSH_H(State8080 *state)
 }
 
 inline void
+PUSH_PC(State8080 *state)
+{
+	state->memory[state->sp-1] = ((state->pc & 0xFF00) >> 8);
+	state->memory[state->sp-2] = (state->pc & 0xFF);
+	state->sp -= 2;
+}
+
+inline void
 SPHL(State8080 *state)
 {
     u16 hl = (state->h << 8) | (state->l & 0xFF);
@@ -558,18 +566,22 @@ int Emulate8080Op(State8080 *state)
 	    state->b = opcode[2];
 	    state->pc += 2;
 	} break;
-        case 0x02: UnimplementedInstruction(state); break;
-        case 0x03: INX_RP(&state->b, &state->c); break;	// INX B
-        case 0x04: process_flags_nc(state, ++state->b); break;	// INR B
-        case 0x05: process_flags_nc(state, --state->b); break;	// DCR B
+	case 0x02:
+	{
+		u16 addr = (state->b << 8) | (state->c & 0xFF);
+		state->memory[addr] = state->a;
+	} break;
+	case 0x03: INX_RP(&state->b, &state->c); break;	// INX B
+	case 0x04: process_flags_nc(state, ++state->b); break;	// INR B
+	case 0x05: process_flags_nc(state, --state->b); break;	// DCR B
 	case 0x06: state->b = opcode[1]; state->pc++; break;	// MVI B,D8
 	case 0x07: RLC(state); break; // RLC
 	// --
-        case 0x09: DAD_RP(state, state->b, state->c); break;	// DAD B
+	case 0x09: DAD_RP(state, state->b, state->c); break;	// DAD B
 	case 0x0A: LDAX(state, &state->b); break;   // LDAX B
-        case 0x0B: DCX_RP(&state->b, &state->c); break;	// DCX B
-        case 0x0C: process_flags_nc(state, ++state->c); break;	// INR C
-        case 0x0D: process_flags_nc(state, --state->c); break;	// DCR C
+	case 0x0B: DCX_RP(&state->b, &state->c); break;	// DCX B
+	case 0x0C: process_flags_nc(state, ++state->c); break;	// INR C
+	case 0x0D: process_flags_nc(state, --state->c); break;	// DCR C
 	case 0x0E: state->c = opcode[1]; state->pc++; break;   // MVI C,D8
 	case 0x0F:  // RRC
 	{
@@ -643,13 +655,24 @@ int Emulate8080Op(State8080 *state)
 	case 0x4d: state->c = state->l; break;	// MOV C,L
 	case 0x4e: state->c = *MemoryLocation(state); break;	// MOV C,M
 	case 0x4f: state->c = state->a; break;	// MOV C,A
-	case 0x5E: state->e = *MemoryLocation(state); break;	// MOV E,M
 	case 0x56: state->d = *MemoryLocation(state); break;	// MOV D,M
 	case 0x57: state->d = state->a; break;	// MOV D,A
+	case 0x59: state->e = state->c; break;	// MOV E,C
+	case 0x5a: state->e = state->d; break;	// MOV E,D
+	case 0x5b: state->e = state->e; break;	// MOV E,E
+	case 0x5c: state->e = state->h; break;	// MOV E,H
+	case 0x5d: state->e = state->l; break;	// MOV E,L
+	case 0x5E: state->e = *MemoryLocation(state); break;	// MOV E,M
 	case 0x5F: state->e = state->a; break;	// MOV E,A
-	case 0x6F: state->l = state->a; break;	// MOV L,A
+	case 0x60: state->h = state->b; break;	// MOV H,B
+	case 0x61: state->h = state->c; break;	// MOV H,C
+	case 0x62: state->h = state->d; break;	// MOV H,D
+	case 0x63: state->h = state->e; break;	// MOV H,E
+	case 0x64: state->h = state->h; break;	// MOV H,H
+	case 0x65: state->h = state->l; break;	// MOV H,L
 	case 0x66: state->h = *MemoryLocation(state); break;	// MOV H,M
 	case 0x67: state->h = state->a; break;	// MOV H,A
+	case 0x6F: state->l = state->a; break;	// MOV L,A
 	case 0x70: *MemoryLocation(state) = state->b; break;	// MOV M,B
 	case 0x71: *MemoryLocation(state) = state->c; break;	// MOV M,C
 	case 0x72: *MemoryLocation(state) = state->d; break;	// MOV M,D
