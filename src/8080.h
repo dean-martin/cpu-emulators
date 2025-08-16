@@ -78,7 +78,23 @@ u8 *MemoryLocation(State8080 *state)
 }
 
 // @TODO: Implement
-u8 *WriteMemory(State8080 *state, u16 addr, u8 val);
+u8 *WriteMemory(State8080 *state, u16 Address, u8 Value)
+{
+	if (Address < 0x2000) {
+		fprintf(stderr, "Writing to ROM memory not allowed %x\n", Address);
+		exit(1);
+		return 0;
+	}
+	if (Address >= 0x4000) {
+		fprintf(stderr, "Writing out to Space Invaders RAM not allowed %x\n", Address);
+		exit(1);
+		return 0;
+	}
+	state->memory[Address] = Value;
+
+	return (u8 *) state->memory[Address];
+}
+
 
 int LoadROMFile(State8080 *state, char *FileName)
 {
@@ -102,7 +118,8 @@ int LoadROMFile(State8080 *state, char *FileName)
 inline void
 UnimplementedInstruction(State8080 *state)
 {
-    fprintf(stderr, "Error: unimplemented instruction\nopcode: 0x%02x\naddr: 0x%02x", state->memory[state->pc], state->pc);
+    fprintf(stderr, "Error: unimplemented instruction\nopcode: 0x%02x\naddr: 0x%02x",
+			state->memory[state->pc], state->pc);
     exit(1);
 }
 
@@ -267,8 +284,8 @@ CALL(State8080 *state)
 {
     u8 *opcode = &state->memory[state->pc];
     u16 ret = state->pc+2;
-    state->memory[state->sp-1] = (ret >> 8) & 0xFF;
-    state->memory[state->sp-2] = (ret & 0xFF);
+	WriteMemory(state, state->sp-1, (ret >> 8) & 0xFF);
+	WriteMemory(state, state->sp-2, (ret & 0xFF));
     state->sp -= 2;
     state->pc = (opcode[2] << 8) | opcode[1];
     // @TODO: adjust
@@ -304,8 +321,8 @@ inline void
 RST(State8080 *state, u8 NNN)
 {
     u16 ret = state->pc+2;
-    state->memory[state->sp-1] = (ret >> 8) & 0xFF;
-    state->memory[state->sp-2] = (ret & 0xFF);
+	WriteMemory(state, state->sp-1, (ret >> 8) & 0xFF);
+	WriteMemory(state, state->sp-2, (ret & 0xFF));
     state->sp -= 2;
     state->pc = 8 * NNN;
 }
@@ -424,32 +441,32 @@ POP_H(State8080 *state)
 inline void
 PUSH_B(State8080 *state)
 {
-    state->memory[state->sp-1] = state->b;
-    state->memory[state->sp-2] = state->c;
+	WriteMemory(state, state->sp-1, state->b);
+	WriteMemory(state, state->sp-2, state->c);
     state->sp -= 2;
 }
 
 inline void
 PUSH_D(State8080 *state)
 {
-    state->memory[state->sp-1] = state->d;
-    state->memory[state->sp-2] = state->e;
+	WriteMemory(state, state->sp-1, state->d);
+	WriteMemory(state, state->sp-2, state->e);
     state->sp -= 2;
 }
 
 inline void
 PUSH_H(State8080 *state)
 {
-    state->memory[state->sp-1] = state->h;
-    state->memory[state->sp-2] = state->l;
+	WriteMemory(state, state->sp-1, state->h);
+	WriteMemory(state, state->sp-2, state->l);
     state->sp -= 2;
 }
 
 inline void
 PUSH_PC(State8080 *state)
 {
-	state->memory[state->sp-1] = ((state->pc & 0xFF00) >> 8);
-	state->memory[state->sp-2] = (state->pc & 0xFF);
+	WriteMemory(state, state->sp-1, ((state->pc & 0xFF00) >> 8));
+	WriteMemory(state, state->sp-2, (state->pc & 0xFF));
 	state->sp -= 2;
 }
 
@@ -467,8 +484,8 @@ XTHL(State8080 *state)
     u8 h = state->h;
     state->l = state->memory[state->sp];
     state->h = state->memory[state->sp+1];
-    state->memory[state->sp] = l;
-    state->memory[state->sp+1] = h;
+	WriteMemory(state, state->sp, l);
+	WriteMemory(state, state->sp+1, h);
 }
 
 inline void
@@ -490,13 +507,13 @@ POP_PSW(State8080 *state)
 inline void
 PUSH_PSW(State8080 *state)
 {
-    state->memory[state->sp-1] = state->a;
+	WriteMemory(state, state->sp-1, state->a);
     u8 psw = (state->cc.z |
 		    state->cc.s << 1 |
 		    state->cc.p << 2 |
 		    state->cc.cy << 3 |
 		    state->cc.ac << 4 );
-    state->memory[state->sp-2] = psw;
+	WriteMemory(state, state->sp-2, psw);
     state->sp = state->sp - 2;
 }
 
@@ -569,7 +586,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x02:
 	{
 		u16 addr = (state->b << 8) | (state->c & 0xFF);
-		state->memory[addr] = state->a;
+		WriteMemory(state, addr, state->a);
 	} break;
 	case 0x03: INX_RP(&state->b, &state->c); break;	// INX B
 	case 0x04: process_flags_nc(state, ++state->b); break;	// INR B
