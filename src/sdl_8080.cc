@@ -26,7 +26,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         exit(1);
     }
 
-    VideoPixels = (u8 *)calloc(1, 256*224);
+    VideoPixels = (u8 *) calloc(1, 256*224);
     if (!VideoPixels)
     {
         printf("[ERROR] failed to alloc VideoPixels\n");
@@ -41,8 +41,9 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 {
     if(event->type == SDL_EVENT_KEY_DOWN)
     {
-		// @TODO: check for Esc or Q.
-		return SDL_APP_SUCCESS;
+		SDL_KeyboardEvent *e = (SDL_KeyboardEvent *) event;
+		if (e->key == SDLK_ESCAPE || e->key == SDLK_Q)
+			return SDL_APP_SUCCESS;
     }
     if (event->type == SDL_EVENT_QUIT) {
         return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
