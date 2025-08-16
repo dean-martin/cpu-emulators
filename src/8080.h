@@ -30,7 +30,7 @@ typedef struct State8080 {
     u16 sp;
     u16 pc;
     u8 *memory;
-    u8 interupt_enabled;
+    u8 interrupt_enabled;
 
     ConditionCodes cc;
 
@@ -222,6 +222,15 @@ inline void DAD_RP(State8080 *state, u8 rh, u8 rl)
     state->h = (hl>>8) & 0xFF;
 }
 
+inline void
+LHLD(State8080 *state)
+{
+	u8 addr = state->pc+1;
+	state->l = state->memory[addr];
+	state->h = state->memory[addr+1];
+	state->pc+=2;
+}
+
 inline void DAA(State8080 *state)
 {
 /*
@@ -379,7 +388,6 @@ IN(State8080 *state)
 {
     // @TODO: implement
     state->pc++;
-    //state->pc+=2;
 }
 
 inline void
@@ -387,7 +395,6 @@ OUT(State8080 *state)
 {
     // @TODO: implement
     state->pc++;
-    //state->pc+=2;
 }
 
 inline void
@@ -571,29 +578,32 @@ int Emulate8080Op(State8080 *state)
 	    state->cc.cy = (1 == (x&1));
 	} break;
 	case 0x11: LXI_RP(state, &state->d); break; // LXI D,D16
-        case 0x13: INX_RP(&state->d, &state->e); break;	// INX D
-        case 0x14: process_flags_nc(state, ++state->d); break;	// INR D
-        case 0x15: process_flags_nc(state, --state->d); break;	// DCR D
-        case 0x17: RAL(state); break; // RAL
+	case 0x13: INX_RP(&state->d, &state->e); break;	// INX D
+	case 0x14: process_flags_nc(state, ++state->d); break;	// INR D
+	case 0x15: process_flags_nc(state, --state->d); break;	// DCR D
+	case 0x16: state->d = opcode[1]; state->pc++; break;	// MVI D,D8
+	case 0x17: RAL(state); break; // RAL
 	// --
-        case 0x19: DAD_RP(state, state->d, state->e); break;	// DAD D
+	case 0x19: DAD_RP(state, state->d, state->e); break;	// DAD D
 	case 0x1A: LDAX(state, &state->d); break; // LDAX D
-        case 0x1B: DCX_RP(&state->d, &state->e); break;	// DCX D
-        case 0x1c: process_flags_nc(state, ++state->e); break;	// INR E
-        case 0x1d: process_flags_nc(state, --state->e); break;	// DCR E
+	case 0x1B: DCX_RP(&state->d, &state->e); break;	// DCX D
+	case 0x1c: process_flags_nc(state, ++state->e); break;	// INR E
+	case 0x1d: process_flags_nc(state, --state->e); break;	// DCR E
 	case 0x1F: RAR(state); break; // RAR
 	// --
 	case 0x21: LXI_RP(state, &state->h); break;   // LXI H
-        case 0x23: INX_RP(&state->h, &state->l); break;	// INX H
-        case 0x24: process_flags_nc(state, ++state->h); break;	// INR H
-        case 0x25: process_flags_nc(state, --state->h); break;	// DCR H
-        case 0x26: state->h = opcode[1]; state->pc++; break;   //MVI H,D8
-        case 0x27: DAA(state); break;	// DAA
+	case 0x23: INX_RP(&state->h, &state->l); break;	// INX H
+	case 0x24: process_flags_nc(state, ++state->h); break;	// INR H
+	case 0x25: process_flags_nc(state, --state->h); break;	// DCR H
+	case 0x26: state->h = opcode[1]; state->pc++; break;   //MVI H,D8
+	case 0x27: DAA(state); break;	// DAA
 
-        case 0x29: DAD_RP(state, state->h, state->l); break;	// DAD H
-        case 0x2B: DCX_RP(&state->h, &state->l); break;	// DCX H
-        case 0x2c: process_flags_nc(state, ++state->l); break;	// INR L
+	case 0x29: DAD_RP(state, state->h, state->l); break;	// DAD H
+	case 0x2a: LHLD(state); break;	// LHLD addr
+	case 0x2B: DCX_RP(&state->h, &state->l); break;	// DCX H
+	case 0x2c: process_flags_nc(state, ++state->l); break;	// INR L
 	case 0x2d: process_flags_nc(state, --state->l); break;	// DCR L
+	case 0x2E: state->l = opcode[1]; state->pc++; break;	// MVI L,D8
 	case 0x2F:  // CMA (not)
 	{
 		state->a = ~state->a;
@@ -602,16 +612,16 @@ int Emulate8080Op(State8080 *state)
 
 	case 0x31: LXI_SP(state); break;
 	case 0x32: STA(state); break;	// STA addr
-        case 0x33: ++state->sp; break;	// INX SP
-        case 0x34: INR_M(state); break;	// INR M
+	case 0x33: ++state->sp; break;	// INX SP
+	case 0x34: INR_M(state); break;	// INR M
 	case 0x35: DCR_M(state); break;	// DCR L
 	case 0x36: *MemoryLocation(state) = opcode[1]; state->pc++; break; // MVI M,D8
 	case 0x37: state->cc.cy = 1; break; // STC
 	// --
-        case 0x39: DAD_RP(state, state->sp>>8, (state->sp & 0xFF)); break;	// DAD SP
+	case 0x39: DAD_RP(state, state->sp>>8, (state->sp & 0xFF)); break;	// DAD SP
 	case 0x3A: LDA(state); break;	// LDA addr
-        case 0x3B: --state->sp; break;	// DCX SP
-        case 0x3c: process_flags_nc(state, ++state->a);break;	// INR A
+	case 0x3B: --state->sp; break;	// DCX SP
+	case 0x3c: process_flags_nc(state, ++state->a);break;	// INR A
 	case 0x3d: process_flags_nc(state, --state->a); break;	// DCR A
 	case 0x3E: state->a = opcode[1]; state->pc++; break;  // MVI A,D8
 	case 0x3F: // CMC
@@ -621,14 +631,37 @@ int Emulate8080Op(State8080 *state)
 	case 0x41: state->b = state->c; break;	// MOV B,C
 	case 0x42: state->b = state->d; break;	// MOV B,D
 	case 0x43: state->b = state->e; break;	// MOV B,E
+	case 0x44: state->b = state->h; break;	// MOV B,H
+	case 0x45: state->b = state->l; break;	// MOV B,L
+	case 0x46: state->b = *MemoryLocation(state); break;	// MOV B,M
+	case 0x47: state->b = state->a; break;	// MOV B,A
+	case 0x48: state->c = state->b; break;	// MOV C,B
+	case 0x49: state->c = state->c; break;	// MOV C,C
+	case 0x4a: state->c = state->d; break;	// MOV C,D
+	case 0x4b: state->c = state->e; break;	// MOV C,E
+	case 0x4c: state->c = state->h; break;	// MOV C,H
+	case 0x4d: state->c = state->l; break;	// MOV C,L
+	case 0x4e: state->c = *MemoryLocation(state); break;	// MOV C,M
+	case 0x4f: state->c = state->a; break;	// MOV C,A
 	case 0x5E: state->e = *MemoryLocation(state); break;	// MOV E,M
 	case 0x56: state->d = *MemoryLocation(state); break;	// MOV D,M
+	case 0x57: state->d = state->a; break;	// MOV D,A
+	case 0x5F: state->e = state->a; break;	// MOV E,A
 	case 0x6F: state->l = state->a; break;	// MOV L,A
 	case 0x66: state->h = *MemoryLocation(state); break;	// MOV H,M
+	case 0x67: state->h = state->a; break;	// MOV H,A
+	case 0x70: *MemoryLocation(state) = state->b; break;	// MOV M,B
+	case 0x71: *MemoryLocation(state) = state->c; break;	// MOV M,C
 	case 0x72: *MemoryLocation(state) = state->d; break;	// MOV M,D
+	case 0x73: *MemoryLocation(state) = state->e; break;	// MOV M,E
+	case 0x74: *MemoryLocation(state) = state->h; break;	// MOV M,H
+	case 0x75: *MemoryLocation(state) = state->l; break;	// MOV M,L
 	case 0x7C: state->a = state->h; break; // MOV A,H
 	case 0x76: HLT(state); break; // HLT
 	case 0x77: *MemoryLocation(state) = state->a; break; // MOV M,A
+	case 0x78: state->a = state->b; break;	// MOV A,B
+	case 0x79: state->a = state->c; break;	// MOV A,C
+	case 0x7D: state->a = state->l; break;	// MOV A,L
 	case 0x7A: state->a = state->d; break;	// MOV A,D
 	case 0x7B: state->a = state->e; break;	// MOV A,E
 	case 0x7E: state->a = *MemoryLocation(state); break;	// MOV A,M
@@ -878,7 +911,7 @@ int Emulate8080Op(State8080 *state)
 	    else
 		state->pc += 2;
 	} break;
-	case 0xF3:  state->interupt_enabled = 0; break; // DI
+	case 0xF3:  state->interrupt_enabled = 0; break; // DI
 	case 0xF4:  // CP addr
 	{
 	    if (state->cc.s == 0)
@@ -902,7 +935,7 @@ int Emulate8080Op(State8080 *state)
 	    else
 		state->pc += 2;
 	} break;
-	case 0xFB:  state->interupt_enabled = 1; break; // EI
+	case 0xFB:  state->interrupt_enabled = 1; break; // EI
 	case 0xFC:  // CM addr
 	{
 	    if (state->cc.s)

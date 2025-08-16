@@ -2,6 +2,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include "8080.h"
+#include <time.h>
 
 global_variable State8080 GlobalCPU;
 
@@ -44,12 +45,25 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 		SDL_KeyboardEvent *e = (SDL_KeyboardEvent *) event;
 		if (e->key == SDLK_ESCAPE || e->key == SDLK_Q)
 			return SDL_APP_SUCCESS;
+		if (e->key == SDLK_C) {
+			// @TODO: Pretend a Coin was inserted, start game!
+		}
     }
     if (event->type == SDL_EVENT_QUIT) {
         return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
     }
     return SDL_APP_CONTINUE;
 }
+
+void GenerateInterupt(State8080 *cpu, int interrupt_num)
+{
+	// "PUSH PC"
+	// ??? review
+	// Push(state, (state->pc & 0xFF00) >> 8, (state->pc & 0xff));
+	cpu->pc = 8 * interrupt_num;
+}
+
+static time_t lastInterrupt;
 
 /* This function runs once per frame, and is the heart of the program. */
 SDL_AppResult SDL_AppIterate(void *appstate)
@@ -58,6 +72,17 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     // GlobalCPU.DebugPrint = 1;
     Emulate8080Op(&GlobalCPU);
 
+	if (time(NULL) - lastInterrupt > 0) // 1/60 seconds has elapsed
+	{
+		if (GlobalCPU.interrupt_enabled)
+		{
+			GenerateInterupt(&GlobalCPU, 2); // Interrupt 2
+			lastInterrupt = time(NULL);
+		}
+	}
+
+	// @TODO: Timing, Proper video refresh rate and pixel refreshing
+	// @see: https://web.archive.org/web/20241011062657/http://www.emulator101.com/displays-and-refresh.html
     if((GlobalCPU.Steps%10000) == 0)
     {
         // @see: https://computerarcheology.com/Arcade/SpaceInvaders/Hardware.html
