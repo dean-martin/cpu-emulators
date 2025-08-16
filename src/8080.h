@@ -293,8 +293,8 @@ RET(State8080 *state)
 
     state->pc = state->memory[state->sp] | (state->memory[state->sp+1] << 8);
     if (state->pc != b.data) {
-	fprintf(stderr, "AHHHHHHHHHHHHHH");
-	exit(1);
+		fprintf(stderr, "AHHHHHHHHHHHHHH");
+		exit(1);
     }
     // state->pc = b.data;
     state->sp += 2;
@@ -506,7 +506,7 @@ LXI_SP(State8080 *state)
     u8 byte2 = state->memory[state->pc+1];
     u8 byte3 = state->memory[state->pc+2];
     state->pc += 2;
-    state->sp = (byte3 << 8) | byte2;;
+    state->sp = (byte3 << 8) | byte2;
 }
 
 inline void
@@ -948,7 +948,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xF8:  // RM
 	{
 	    if (state->cc.s)
-		RET(state);
+			RET(state);
 	} break;
 	case 0xF9: SPHL(state); break; // SPHL
 	case 0xFA:  // JM addr

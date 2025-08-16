@@ -5,3 +5,7 @@ Links:
 - https://web.archive.org/web/20241010195903/http://www.emulator101.com/
 
 
+Debugging:
+	- memory write protection
+	- stack pointer monitoring (Stack SQUASH checks)
+	- cpudiag.bin

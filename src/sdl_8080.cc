@@ -15,12 +15,6 @@ const int WindowHeight = 360;
 
 static time_t lastInterrupt;
 
-#define LEFT 0
-#define RIGHT 1
-
-static u16 shift0;
-static u16 shift1;
-
 // @see: https://www.computerarcheology.com/Arcade/SpaceInvaders/Hardware.html
 /*
    Ports:
@@ -115,26 +109,24 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     return SDL_APP_CONTINUE;
 }
 
-void GenerateInterupt(State8080 *cpu, int interrupt_num)
+void GenerateInterrupt(State8080 *cpu, int interrupt_num)
 {
 	PUSH_PC(&GlobalCPU);
 	cpu->pc = 8 * interrupt_num;
+	GlobalCPU.interrupt_enabled = 0;
 }
 
 u8 MachineIN(State8080 *cpu, u8 port)
 {
 	SDL_Log("IN: Port: %d", port);
-	if (port == 1) 
-	{
-		char *s = ByteToBinary(ports[port]);
-		SDL_Log("%s", s);
-		free(s);
-		s = NULL;
-	}
+	// This enables attract mode
+	if (port == 0)
+		return 1;
+	if (port == 1)
+		return 0;
 
 	if (port == 3)
 	{
-		// @TODO: review this, wtf?
 		return ((shift_register >> (8-shift_offset)) & 0xFF);
 	}
 	return ports[port];
@@ -142,15 +134,15 @@ u8 MachineIN(State8080 *cpu, u8 port)
 
 void MachineOUT(State8080 *cpu, u8 port)
 {
-	if (port != 6)
+	if (port != 6) // Watch dog is noisy.
 		SDL_Log("OUT: Port: %d", port);
 	if (port == 2)
 	{
-		shift_offset = cpu->a & 0x7;
+		shift_offset = cpu->a & 0x7; 
 	}
 	if (port == 4)
 	{
-		shift_register = (cpu->a << 8) | (shift_register & 0xFF);
+		shift_register = (cpu->a << 8) | (shift_register >> 8);
 	}
 	ports[port] = cpu->a;
 }
@@ -158,10 +150,12 @@ void MachineOUT(State8080 *cpu, u8 port)
 static time_t lastRender;
 void RenderScreen();
 
+static bool last = true;
+
 /* This function runs once per frame, and is the heart of the program. */
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
-    // SDL_Delay(0.001);
+    // SDL_Delay(0.1);
     // GlobalCPU.DebugPrint = 1;
 	u8 *opcode = &GlobalCPU.memory[GlobalCPU.pc];
 	if (*opcode == 0xDB) // IN
@@ -179,17 +173,21 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	else 
 		Emulate8080Op(&GlobalCPU);
 
+	// @TODO: This hack timing would work properly with rendering.
 	if (time(NULL) - lastInterrupt > 1.0/60.0) // 1/60 seconds has elapsed
 	{
 		if (GlobalCPU.interrupt_enabled)
 		{
-			GenerateInterupt(&GlobalCPU, 2); // Interrupt 2
+			if (last){
+				GenerateInterrupt(&GlobalCPU, 2); // Interrupt "0x10"
+			} else {
+				GenerateInterrupt(&GlobalCPU, 1); // Interrupt "0x8"
+			}
+			last = !last;
 			lastInterrupt = time(NULL);
 		}
 	}
 
-	// @TODO: Timing, Proper video refresh rate and pixel refreshing
-	// @see: https://web.archive.org/web/20241011062657/http://www.emulator101.com/displays-and-refresh.html
 	if(time(NULL) - lastRender > 1.0/60.0)
     {
 		RenderScreen();
@@ -199,6 +197,8 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     return SDL_APP_CONTINUE;
 }
 
+// This does a full render at once, maybe I should do a per frame rendering?
+// This would align more with how the hardware actually works...
 void RenderScreen()
 {
 	// SDL_Log("rendering");
@@ -206,6 +206,8 @@ void RenderScreen()
 	// NOTE: Video RAM is 2400-3FFF
 	// The screens pixels are on/off (1 bit each). 256*224/8 = 7168 (7K) bytes.
 	u8 *VideoRAM = GlobalCPU.memory + 0x2400;
+
+	// @TODO: don't write into separate buffer?
 
 	// @TODO: don't use u8 for a 1 bit value.
 	u8 *Pixel = (u8 *)VideoPixels;
