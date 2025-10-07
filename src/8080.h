@@ -1,16 +1,21 @@
 #include "common.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
+
+#ifndef __cplusplus__
+#define inline  
+#endif
 
 // @TODO: clean up, make 8080.cc a proper include?
 
 typedef struct ConditionCodes {
-	uint8_t z:1;
-	uint8_t s:1;
-	uint8_t p:1;
-	uint8_t cy:1;
-	uint8_t ac:1; // not implemented.
-	uint8_t pad:3; // padding to align to 8bit boundary? should review K&R. thought it auto happens, and not critical here too.
+	u8 z:1;
+	u8 s:1;
+	u8 p:1;
+	u8 cy:1;
+	u8 ac:1; // not implemented.
+	u8 pad:3; // padding to align to 8bit boundary? should review K&R. thought it auto happens, and not critical here too.
 } ConditionCodes;
 
 // @see: https://gcc.gnu.org/onlinedocs/gcc-4.4.4/gcc/Structure_002dPacking-Pragmas.html
@@ -45,8 +50,8 @@ typedef struct State8080 {
 typedef union {
     // so we read in Big Endianness, but Little Endian looks like this, ok ok.
     struct {
-	u8 low;
-	u8 high;
+		u8 low;
+		u8 high;
     };
     u16 data;
 } bytes; // @TODO: better name
@@ -72,7 +77,9 @@ bool InitCPU(State8080 *CPU)
 // H&L pair is considered "memory" in the data book.
 u8 *MemoryLocation(State8080 *state)
 {
-    bytes b = bytes{state->l, state->h};
+    bytes b;
+	b.low = state->l;
+	b.high = state->h; // = bytes{state->l, state->h};
     // printf("offset: 0x%x\n", b.data);
     return &state->memory[b.data];
 }
@@ -689,6 +696,8 @@ int Emulate8080Op(State8080 *state)
 	case 0x65: state->h = state->l; break;	// MOV H,L
 	case 0x66: state->h = *MemoryLocation(state); break;	// MOV H,M
 	case 0x67: state->h = state->a; break;	// MOV H,A
+	case 0x68: state->l = state->b; break;	// MOV L,B
+	case 0x6c: state->l = state->h; break;	// MOV L,H
 	case 0x6F: state->l = state->a; break;	// MOV L,A
 	case 0x70: *MemoryLocation(state) = state->b; break;	// MOV M,B
 	case 0x71: *MemoryLocation(state) = state->c; break;	// MOV M,C

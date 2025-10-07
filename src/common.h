@@ -35,7 +35,7 @@ typedef int32 bool32;
 #define max(a,b) ((a > b) ? a : b)
 #define min(a, b) ((a < b) ? a : b)
 
-int isdigit(char c)
+int isdigit(int c)
 {
     return (c >= '0') && (c <= '9');
 }
