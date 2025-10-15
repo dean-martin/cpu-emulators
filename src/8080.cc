@@ -40,7 +40,7 @@ void WriteMemory(State8080 *state, u16 Address, u8 Value)
 }
 
 
-int LoadROMFile(State8080 *state, char *FileName)
+int LoadROMFile(State8080 *state, const char *FileName)
 {
     // FileName = "W:\\chip-8\\rom\\invaders";
     FILE *fp = fopen(FileName, "rb");
@@ -1238,27 +1238,28 @@ int Disassemble8080Op(unsigned char *codebuffer, int pc)
     return opbytes;
 }
 
+#if 0
 void p(int a);
 // bonus points for figuring out multiplication using bit shifts. :O
 // doesn't work with numbers > 10, but 1-9 just fine.
 int binmul(int a, int b)
 {
-    int max = max(a,b);
-    int min = min(a,b);
-    int maxb = max;
-    int minb = min;
+    int Max = max(a,b);
+    int Min = min(a,b);
+    int maxb = Max;
+    int minb = Min;
     if (a == 1 || b == 1)
-	return max;
-    while (min > 0) {
-	// @TODO: handle wrapped bits for big numbers.
-	if ((min >>= 1) > 0)
-	    max <<= 1;
-	if (min == 3)
-	    max += maxb;
+		return Max;
+    while (Min > 0) {
+		// @TODO: handle wrapped bits for big numbers.
+		if ((Min >>= 1) > 0)
+			Max <<= 1;
+		if (Min == 3)
+			Max += maxb;
     }
     if (minb & 1)
-	max += maxb;
-    return max;
+		Max += maxb;
+    return Max;
 }
 
 void p(int a)
@@ -1283,6 +1284,7 @@ void debug(int a, int b)
 	exit(1);
     }
 }
+#endif
 
 #if 0
 int main(int argc, char **argv)

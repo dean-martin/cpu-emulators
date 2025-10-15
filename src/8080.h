@@ -66,5 +66,5 @@ bool InitCPU(State8080 *CPU);
 
 int Disassemble8080Op(unsigned char *buffer, int pc);
 int Emulate8080Op(State8080 *state);
-int LoadROMFile(State8080 *state, char *FileName);
+int LoadROMFile(State8080 *state, const char *FileName);
 

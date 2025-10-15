@@ -1,4 +1,4 @@
-#include "8080.cc"
+#include "8080.h"
 
 int main(int argc, char **argv)
 {

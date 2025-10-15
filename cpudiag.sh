@@ -1,6 +1,6 @@
 #!/bin/env bash
 set -euo pipefail
 pushd build
-gcc ../src/cpudiag.c -o cpudiagtest
+g++ ../src/cpudiag.cc ../src/8080.cc -o cpudiagtest
 ./cpudiagtest
 popd
