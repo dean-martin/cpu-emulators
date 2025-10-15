@@ -24,6 +24,7 @@ u8 *MemoryLocation(State8080 *state)
 }
 
 
+// @TODO: account for CPU Diagnostic runs
 void WriteMemory(State8080 *state, u16 Address, u8 Value)
 {
 	if (Address < 0x2000) {
@@ -45,7 +46,7 @@ int LoadROMFile(State8080 *state, const char *FileName)
     // FileName = "W:\\chip-8\\rom\\invaders";
     FILE *fp = fopen(FileName, "rb");
     if (fp == NULL) {
-		fprintf(stderr, "failed to open file `%s`", FileName);
+		fprintf(stderr, "failed to open file `%s`\n%s\n", FileName, strerror(errno));
 		return 0;
     }
 
@@ -62,7 +63,7 @@ int LoadROMFile(State8080 *state, const char *FileName)
 inline void
 UnimplementedInstruction(State8080 *state)
 {
-    fprintf(stderr, "Error: unimplemented instruction\nopcode: 0x%02x\naddr: 0x%02x",
+    fprintf(stderr, "Error: unimplemented instruction\nopcode: 0x%02x\naddr: 0x%02x\n",
 			state->memory[state->pc], state->pc);
     exit(1);
 }

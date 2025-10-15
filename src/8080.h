@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <string.h>
+#include <errno.h>
 
 #ifndef __cplusplus__
 #define inline  
