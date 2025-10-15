@@ -33,8 +33,14 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         return SDL_APP_FAILURE;
     }
 
-    if((!InitCPU(&GlobalCPU)) || (LoadROMFile(&GlobalCPU, "rom/invaders") == 0))
+	if (!InitCPU(&GlobalCPU)) 
+	{
+		SDL_Log("Failed to init CPU, not enough memory?");
+		exit(1);
+	}
+    if(LoadROMFile(&GlobalCPU, "rom/invaders") == 0)
     {
+		SDL_Log("Failed to load invaders rom file, make sure it's placed as ./rom/invaders");
         exit(1);
     }
 
