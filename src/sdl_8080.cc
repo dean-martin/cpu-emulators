@@ -1,7 +1,8 @@
 #define SDL_MAIN_USE_CALLBACKS 1  /* use the callbacks instead of main() */
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
-#include "8080.h"
+// @TODO: replace with header
+#include "8080.cc"
 #include <time.h>
 
 global_variable State8080 GlobalCPU;

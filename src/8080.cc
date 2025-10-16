@@ -193,15 +193,14 @@ inline void DCX_RP(u8 *rh, u8 *rl)
     *rh = (pair >> 8) & 0xFF;
 }
 
-// @TODO: test
 inline void DAD_RP(State8080 *state, u8 rh, u8 rl)
 {
-    u16 hl = ((u16)state->h << 8) | (u16) state->l;
-    u16 bc = ((u16)rh << 8) | (u16) rl;
+    u32 hl = (state->h << 8) | state->l;
+    u32 bc = (rh << 8) | rl;
     hl += bc;
-    state->cc.cy = (hl > 0xff);
+    state->cc.cy = (hl & 0xffff0000) != 0;
     state->l = (hl & 0xFF);
-    state->h = (hl>>8) & 0xFF;
+    state->h = hl >> 8;
 }
 
 inline void
@@ -624,7 +623,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x36: *MemoryLocation(state) = opcode[1]; state->pc++; break; // MVI M,D8
 	case 0x37: state->cc.cy = 1; break; // STC
 	// --
-	case 0x39: DAD_RP(state, state->sp>>8, (state->sp & 0xFF)); break;	// DAD SP
+	case 0x39: DAD_RP(state, (state->sp >> 8), (state->sp & 0xFF)); break;	// DAD SP
 	case 0x3A: _LDA(state); break;	// LDA addr
 	case 0x3B: --state->sp; break;	// DCX SP
 	case 0x3c: process_flags_nc(state, ++state->a);break;	// INR A
