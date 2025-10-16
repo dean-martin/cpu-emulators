@@ -10,8 +10,79 @@
 #define inline  
 #endif
 
+// why did i start this
+// @TODO: a lookup table would be great
+#define NOP 0x00
+#define LXI_B 0x01
+#define STAX_B 0x02
+#define INX_B 0x03
+#define INR_B 0x04
+#define DCR_B 0x05
+#define MVI_B 0x06
+#define RLC 0x07
+// -
+#define DAD_B 0x09
+#define LDAX_B 0x0a
+#define DCX_B 0x0b
+#define INR_C 0x0c
+#define DCR_C 0x0d
+#define MVI_C 0x0e
+#define RRC 0x0f
+// -
+#define LXI_D 0x011
 #define STAX_D 0x12
 #define INX_D 0x13
+#define INR_D 0x14
+#define DCR_D 0x15
+#define MVI_D 0x16
+#define RAL 0x17
+// - 
+#define DAD_D 0x19
+#define LDAX_D 0x1a
+#define DCX_D 0x1b
+#define INR_E 0x1c
+#define DCR_E 0x1d
+#define MVI_E 0x1e
+#define RAR 0x1f // HAVE YOU PAID FOR WINRAR?
+// - O_O
+#define LXI_H 0x21
+#define SHLD 0x22
+#define INX_H 0x23
+#define INR_H 0x24
+#define DCR_H 0x25
+#define MVI_H 0x26
+#define DAA 0x27
+// -
+#define DAD_H 0x29
+#define LHLD 0x2a
+#define DCX_H 0x2b
+#define INR_L 0x2c
+#define DCR_L 0x2d
+#define MVI_L 0x2e
+#define CMA 0x2f
+// -
+#define LXI_SP 0x31
+#define STA 0x32
+#define INX_SP 0x33
+#define INR_M 0x34
+#define DCR_M 0x35
+#define MVI_M 0x36
+#define STC 0x37
+// -
+#define DAD_SP 0x39
+#define LDA 0x3a
+#define DCX_SP 0x3b
+#define INR_A 0x3c
+#define DCR_A 0x3d
+#define MVI_A 0x3e
+#define CMC 0x3f
+#define MOV_B_B 0x40
+#define MOV_B_C 0x41
+#define MOV_B_D 0x42
+#define MOV_B_E 0x43
+#define MOV_B_H 0x44
+
+#define CALL 0xcd
 
 // @TODO: clean up, make 8080.cc a proper include?
 
@@ -67,6 +138,7 @@ typedef union {
 // B represents the B,C pair with B as the high-order register and C as the
 // low-order register;
 u16 Bytes(u8 high, u8 low);
+u16 RegisterPair(State8080 *cpu, char pair);
 
 char *ByteToBinary(unsigned char num);
 void PrintBinary(unsigned x);

@@ -1,4 +1,7 @@
 #include <stdint.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 typedef int8_t s8;
 typedef int16_t s16;
@@ -34,4 +37,3 @@ typedef int32 bool32;
 
 #define max(a,b) ((a > b) ? a : b)
 #define min(a, b) ((a < b) ? a : b)
-
