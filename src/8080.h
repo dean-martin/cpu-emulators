@@ -59,11 +59,10 @@ typedef union {
     u16 data;
 } bytes; // @TODO: better name
 
-// @TODO maybe rename to "Word" or "Data Word" is u16 iirc
 // rp:
 // B represents the B,C pair with B as the high-order register and C as the
 // low-order register;
-u16 Bytes(u8 high, u8 low);
+u16 Word16(u8 high, u8 low);
 u16 RegisterPair(State8080 *cpu, char pair);
 
 char *ByteToBinary(unsigned char num);
@@ -151,4 +150,14 @@ PUSH_PC(State8080 *state);
 #define MOV_B_E 0x43
 #define MOV_B_H 0x44
 
+#define ADD_B 0x80
+#define ADD_C 0x81
+#define ADD_D 0x82
+#define ADD_E 0x83
+#define ADD_H 0x84
+#define ADD_L 0x85
+#define ADD_M 0x86
+#define ADD_A 0x87
+
 #define CALL 0xcd
+

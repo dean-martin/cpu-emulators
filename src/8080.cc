@@ -14,16 +14,16 @@ bool InitCPU(State8080 *CPU)
 u16 RegisterPair(State8080 *cpu, char pair)
 {
 	if (pair == 'b')
-		return Bytes(cpu->b, cpu->c);
+		return Word16(cpu->b, cpu->c);
 	if (pair == 'd')
-		return Bytes(cpu->d, cpu->e);
+		return Word16(cpu->d, cpu->e);
 	if (pair == 'h')
-		return Bytes(cpu->h, cpu->l);
+		return Word16(cpu->h, cpu->l);
 	// @TODO: panic!
 	return -1;
 }
 
-u16 Bytes(u8 high, u8 low)
+u16 Word16(u8 high, u8 low)
 {
 	bytes b;
 	b.high = high;
@@ -35,11 +35,7 @@ u16 Bytes(u8 high, u8 low)
 // H&L pair is considered "memory" in the data book.
 u8 *MemoryLocation(State8080 *state)
 {
-    bytes b;
-	b.low = state->l;
-	b.high = state->h; // = bytes{state->l, state->h};
-    // printf("offset: 0x%x\n", b.data);
-    return &state->memory[b.data];
+    return &state->memory[Word16(state->h, state->l)];
 }
 
 
@@ -573,7 +569,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x11: LXI_RP(state, &state->d); break; // LXI D,D16
 	case STAX_D:
 	{
-		u16 rp = Bytes(state->d, state->e);
+		u16 rp = Word16(state->d, state->e);
 		state->memory[rp] = state->a;
 	} break;
 	case 0x13: INX_RP(&state->d, &state->e); break;	// INX D

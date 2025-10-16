@@ -9,6 +9,73 @@ void pass(const char *msg);
 void fail(const char *msg);
 void reset(State8080 *cpu);
 
+void test_ADD(State8080 *cpu)
+{
+// ADD r (Add Register)
+// (A) <- (A) + (r)
+// The content of register r is added to the content of the
+// accumulator. The result is placed in the accumulator.
+
+	// B
+	reset(cpu);
+	cpu->a = 0x3;
+	cpu->b = 0x1;
+	cpu->memory[0] = ADD_B;
+	Emulate8080Op(cpu);
+	assert(cpu->a == 0x4);
+
+	// C
+	reset(cpu);
+	cpu->a = 0x3;
+	cpu->c = 0x1;
+	cpu->memory[0] = ADD_C;
+	Emulate8080Op(cpu);
+	assert(cpu->a == 0x4);
+
+	// D
+	reset(cpu);
+	cpu->a = 0x3;
+	cpu->d = 0x1;
+	cpu->memory[0] = ADD_D;
+	Emulate8080Op(cpu);
+	assert(cpu->a == 0x4);
+
+	// E
+	reset(cpu);
+	cpu->a = 0x3;
+	cpu->e = 0x1;
+	cpu->memory[0] = ADD_E;
+	Emulate8080Op(cpu);
+	assert(cpu->a == 0x4);
+
+	// L
+	reset(cpu);
+	cpu->a = 0x3;
+	cpu->l = 0x1;
+	cpu->memory[0] = ADD_L;
+	Emulate8080Op(cpu);
+	assert(cpu->a == 0x4);
+
+	// M
+	reset(cpu);
+	cpu->a = 0x5;
+	cpu->h = 0x12;
+	cpu->l = 0x34;
+	cpu->memory[0] = ADD_M;
+	cpu->memory[0x1234] = 0x6;
+	Emulate8080Op(cpu);
+	assert(cpu->a == 0x6+0x5);
+
+	// A
+	reset(cpu);
+	cpu->a = 0x1;
+	cpu->memory[0] = ADD_A;
+	Emulate8080Op(cpu);
+	assert(cpu->a == 0x2);
+
+	pass("ADD passed\n");
+}
+
 void test_DAD_RP(State8080 *cpu)
 {
 // (H) (L) <- (H) (L) + (rh) (rl)
@@ -117,6 +184,7 @@ int main(int argc, char **argv)
 	{
 		fail("failed to init CPU\n");
 	}
+	test_ADD(&State);
 	test_DAD_RP(&State);
 	test_DCX_RP(&State);
 	test_STAX_D(&State);
