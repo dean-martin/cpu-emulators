@@ -11,6 +11,13 @@ bool InitCPU(State8080 *CPU)
     return CPU->memory != NULL;
 }
 
+u16 Bytes(u8 low, u8 high)
+{
+	bytes b;
+	b.low = low;
+	b.high = high;
+	return b.data;
+}
 
 // Pointer to ((H) (L))
 // H&L pair is considered "memory" in the data book.
@@ -27,16 +34,18 @@ u8 *MemoryLocation(State8080 *state)
 // @TODO: account for CPU Diagnostic runs
 void WriteMemory(State8080 *state, u16 Address, u8 Value)
 {
-	if (Address < 0x2000) {
-		fprintf(stderr, "Writing to ROM memory not allowed %x\n", Address);
-		exit(1);
-		return;
-	}
-	if (Address >= 0x4000) {
-		fprintf(stderr, "Writing out to Space Invaders RAM not allowed %x\n", Address);
-		exit(1);
-		return;
-	}
+	// if (Address < 0x2000) 
+	// {
+	// 	fprintf(stderr, "Writing to ROM memory not allowed %x\n", Address);
+	// 	exit(1);
+	// 	return;
+	// }
+	// if (Address >= 0x4000) 
+	// {
+	// 	fprintf(stderr, "Writing out to Space Invaders RAM not allowed %x\n", Address);
+	// 	exit(1);
+	// 	return;
+	// }
 	state->memory[Address] = Value;
 }
 
@@ -552,6 +561,11 @@ int Emulate8080Op(State8080 *state)
 	    state->cc.cy = (1 == (x&1));
 	} break;
 	case 0x11: LXI_RP(state, &state->d); break; // LXI D,D16
+	case STAX_D:
+	{
+		u16 rp = Bytes(state->d, state->e);
+		state->memory[rp] = state->a;
+	} break;
 	case 0x13: INX_RP(&state->d, &state->e); break;	// INX D
 	case 0x14: process_flags_nc(state, ++state->d); break;	// INR D
 	case 0x15: process_flags_nc(state, --state->d); break;	// DCR D
@@ -566,6 +580,13 @@ int Emulate8080Op(State8080 *state)
 	case 0x1F: RAR(state); break; // RAR
 	// --
 	case 0x21: LXI_RP(state, &state->h); break;   // LXI H
+	case 0x22:	// SHLD addr
+	{
+		u8 addr = state->pc+1;
+		state->memory[addr] = state->l;
+		state->memory[addr+1] = state->h;
+		state->pc+=2;
+	} break;
 	case 0x23: INX_RP(&state->h, &state->l); break;	// INX H
 	case 0x24: process_flags_nc(state, ++state->h); break;	// INR H
 	case 0x25: process_flags_nc(state, --state->h); break;	// DCR H
@@ -602,6 +623,7 @@ int Emulate8080Op(State8080 *state)
 	{
 	    state->cc.cy = (~state->cc.cy) & 1;
 	} break;
+	case 0x40: state->b = state->b; break;	// MOV B,B
 	case 0x41: state->b = state->c; break;	// MOV B,C
 	case 0x42: state->b = state->d; break;	// MOV B,D
 	case 0x43: state->b = state->e; break;	// MOV B,E
@@ -617,8 +639,13 @@ int Emulate8080Op(State8080 *state)
 	case 0x4d: state->c = state->l; break;	// MOV C,L
 	case 0x4e: state->c = *MemoryLocation(state); break;	// MOV C,M
 	case 0x4f: state->c = state->a; break;	// MOV C,A
+	case 0x52: state->d = state->d; break;	// MOV D,D
+	case 0x53: state->d = state->e; break;	// MOV D,E
+	case 0x54: state->d = state->h; break;	// MOV D,H
+	case 0x55: state->d = state->l; break;	// MOV D,L
 	case 0x56: state->d = *MemoryLocation(state); break;	// MOV D,M
 	case 0x57: state->d = state->a; break;	// MOV D,A
+	case 0x58: state->e = state->b; break;	// MOV E,B
 	case 0x59: state->e = state->c; break;	// MOV E,C
 	case 0x5a: state->e = state->d; break;	// MOV E,D
 	case 0x5b: state->e = state->e; break;	// MOV E,E
@@ -635,6 +662,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x66: state->h = *MemoryLocation(state); break;	// MOV H,M
 	case 0x67: state->h = state->a; break;	// MOV H,A
 	case 0x68: state->l = state->b; break;	// MOV L,B
+	case 0x6b: state->l = state->e; break;	// MOV L,E
 	case 0x6c: state->l = state->h; break;	// MOV L,H
 	case 0x6F: state->l = state->a; break;	// MOV L,A
 	case 0x70: *MemoryLocation(state) = state->b; break;	// MOV M,B
@@ -661,7 +689,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x86: ADD(state, *MemoryLocation(state)); break; // ADD M
 	case 0x87: ADD(state, state->a); break; // ADD A
 	case 0x88: ADC(state, state->b); break; // ADC B
-	case 0x89: ADC(state, state->c); break; // ADC C
+	case 0x89: ADC(state, state->c); break; // ADC 
 	case 0x8a: ADC(state, state->d); break; // ADC D
 	case 0x8b: ADC(state, state->e); break; // ADC E
 	case 0x8c: ADC(state, state->h); break; // ADC H

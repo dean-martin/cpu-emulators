@@ -10,6 +10,9 @@
 #define inline  
 #endif
 
+#define STAX_D 0x12
+#define INX_D 0x13
+
 // @TODO: clean up, make 8080.cc a proper include?
 
 typedef struct ConditionCodes {
@@ -59,6 +62,11 @@ typedef union {
     u16 data;
 } bytes; // @TODO: better name
 
+// @TODO maybe rename to "Word" or "Data Word" is u16 iirc
+// rp:
+// B represents the B,C pair with B as the high-order register and C as the
+// low-order register;
+u16 Bytes(u8 high, u8 low);
 
 char *ByteToBinary(unsigned char num);
 void PrintBinary(unsigned x);
