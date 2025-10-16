@@ -11,12 +11,12 @@ void reset(State8080 *cpu);
 
 void test_DAD_RP(State8080 *cpu)
 {
-	// (H) (L) . . - (H) (L) + (rh) (rl)
-	// The content of the register pair rp is added to the
-	// content of the register pair Hand L. The result is
-	// placed in the register pair Hand L. Note: Only the
-	// CY flag is affected. It is set if there is a carry out of
-	// the double precision add; otherwise it is reset.
+// (H) (L) <- (H) (L) + (rh) (rl)
+// The content of the register pair rp is added to the
+// content of the register pair Hand L. The result is
+// placed in the register pair Hand L. Note: Only the
+// CY flag is affected. It is set if there is a carry out of
+// the double precision add; otherwise it is reset.
 	reset(cpu);
 	cpu->memory[0] = DAD_B;
 	cpu->h = 0x12;
@@ -25,6 +25,10 @@ void test_DAD_RP(State8080 *cpu)
 
 void test_DCX_RP(State8080 *cpu)
 {
+// DCX rp (Decrement register pair)
+// (rh) (rl) <- (rh) (rl) - 1
+// The content of the register pair rp is decremented by
+// one. Note: No condition flags are affected.
 	// B
 	cpu->b = 0x12;
 	cpu->c = 0x00;
@@ -51,6 +55,12 @@ void test_DCX_RP(State8080 *cpu)
 
 void test_STAX_D(State8080 *cpu)
 {
+// STAX rp (Store accumulator indirect)
+// ((rp)) <- (A)
+// The content of register A is moved to the memory lo-
+// cation whose address is in the register pair rp. Note:
+// only register pairs rp=B (registers B and C) or rp=D
+// (registers D and E) may be specified.
 	cpu->a = 25;
 	cpu->d = 0x12;
 	cpu->e = 0x34;

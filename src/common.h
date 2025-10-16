@@ -1,7 +1,4 @@
 #include <stdint.h>
-#include <stdarg.h>
-#include <stdlib.h>
-#include <stdio.h>
 
 typedef int8_t s8;
 typedef int16_t s16;
