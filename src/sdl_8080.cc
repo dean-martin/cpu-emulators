@@ -129,7 +129,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	local_persist bool AlternateInterrupt;
 
     // SDL_Delay(0.1);
-    // GlobalCPU.DebugPrint = 1;
+    GlobalCPU.DebugPrint = 1;
 	u8 *opcode = &GlobalCPU.memory[GlobalCPU.pc];
 	if (*opcode == 0xDB) // IN
 	{
@@ -178,7 +178,7 @@ void RenderScreen()
 	u8 *Pixel = (u8 *)VideoPixels;
 	for(int Y=0; Y < 224; ++Y)
 	{
-		for(int X=0; X < 256/8; (++X, ++VideoRAM))
+		for(int X=0; X < 256; (X+=8, ++VideoRAM))
 		{
 			if((VideoRAM - GlobalCPU.memory) > 0x3FFF)
 			{
@@ -186,7 +186,7 @@ void RenderScreen()
 				exit(1);
 			}
 
-			for(int I=0; I<8; ++I)
+			for(int I = 0; I < 8; ++I)
 			{
 				if((*VideoRAM >> I) & 1)
 					*Pixel++ = 1;
@@ -204,9 +204,11 @@ void RenderScreen()
 		}
 	}
 
+	// Clear to black
 	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 	SDL_RenderClear(renderer);
 
+	// render color green
 	SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
 	int X2 = 0;
 	int Y2 = 0;

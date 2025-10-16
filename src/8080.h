@@ -159,5 +159,14 @@ PUSH_PC(State8080 *state);
 #define ADD_M 0x86
 #define ADD_A 0x87
 
+#define ANA_B 0xa0
+#define ANA_C 0xa1
+#define ANA_D 0xa2
+#define ANA_E 0xa3
+#define ANA_H 0xa4
+#define ANA_L 0xa5
+#define ANA_M 0xa6
+#define ANA_A 0xa7
+
 #define CALL 0xcd
 
