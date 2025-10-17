@@ -9,6 +9,53 @@ void pass(const char *msg);
 void fail(const char *msg);
 void reset(State8080 *cpu);
 
+void test_CALL(State8080 *cpu)
+{
+// CALL addr		(Call)
+// ((SP) - 1) <- (PCH)
+// ((SP) - 2) <- (PCl)
+// (SP) <- (SP) - 2
+// (PC) <- (byte 3) (byte 2)
+// The high-order eight bits of the next instruction ad-
+// dress are moved to the memory location whose
+// address is one less than the content of register SP.
+// The low-order eight bits of the next instruction ad-
+// dress are moved to the memory location whose
+// address is two less than the content of register SP.
+// The content of register SP is decremented by 2. Con-
+// trol is transferred to the instruction whose address is
+// specified in byte 3 and byte 2 of the current
+// instruction.
+	reset(cpu);
+	cpu->pc = 0x100;
+	cpu->memory[0x100] = CALL;
+	cpu->memory[0x101] = 0x42; // low-order data (byte 2)
+	cpu->memory[0x102] = 0x69; // high-order data (byte 3)
+	cpu->memory[0x103] = INR_C;
+	cpu->memory[0x6942] = INR_A;
+	cpu->memory[0x6943] = RET;
+	cpu->sp = 0x2000;
+	Emulate8080Op(cpu);
+
+	assert(cpu->memory[0x2000-1] == 0x01);
+	assert(cpu->memory[0x2000-2] == 0x03);
+	assert(cpu->sp == 0x1ffe);
+	assert(cpu->pc == 0x6942);
+
+	// INR_A
+	Emulate8080Op(cpu);
+	assert(cpu->a == 1);
+	// RET
+	Emulate8080Op(cpu);
+	assert(cpu->pc == 0x103);
+
+	// INR_C
+	Emulate8080Op(cpu);
+	assert(cpu->c == 1);
+
+	pass("CALL passed\n");
+}
+
 void test_LHLD(State8080 *cpu)
 {
 // LHLD addr		(Load Hand L direct)
@@ -498,6 +545,7 @@ int main(int argc, char **argv)
 	test_DCX_RP(&State);
 	test_STAX_D(&State);
 	test_ANA(&State);
+	test_CALL(&State);
 	printf("tests finished\n");
 }
 

@@ -168,5 +168,5 @@ PUSH_PC(State8080 *state);
 #define ANA_M 0xa6
 #define ANA_A 0xa7
 
+#define RET 0xC9
 #define CALL 0xcd
-

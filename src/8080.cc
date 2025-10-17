@@ -267,13 +267,13 @@ inline void
 _CALL(State8080 *state)
 {
     u8 *opcode = &state->memory[state->pc];
-    u16 ret = state->pc+2;
-	WriteMemory(state, state->sp-1, (ret >> 8) & 0xFF);
+    u16 ret = state->pc+3;
+	WriteMemory(state, state->sp-1, (ret >> 8));
 	WriteMemory(state, state->sp-2, (ret & 0xFF));
     state->sp -= 2;
     state->pc = (opcode[2] << 8) | opcode[1];
-    // @TODO: adjust
-    state->pc--;
+	// @TODO: revise: this is for the ++ after switch statement
+	state->pc--;
 }
 
 inline void
@@ -286,7 +286,7 @@ JMP(State8080 *state)
 }
 
 inline void
-RET(State8080 *state)
+_RET(State8080 *state)
 {
     bytes b;
     b.low = state->memory[state->sp];
@@ -297,6 +297,8 @@ RET(State8080 *state)
 		fprintf(stderr, "AHHHHHHHHHHHHHH");
 		exit(1);
     }
+	// @TODO: revise: this is for the ++ after switch statement
+	state->pc--;
     // state->pc = b.data;
     state->sp += 2;
 }
@@ -772,7 +774,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xC0: // RNZ
 	{
 	    if (state->cc.z == 0)
-			RET(state);
+			_RET(state);
 	} break;
 	case 0xC1: POP_B(state); break; // POP_B
 	case 0xC2:  // JNZ addr
@@ -798,9 +800,9 @@ int Emulate8080Op(State8080 *state)
 	case 0xC8: // RZ
 	{
 	    if (state->cc.z)
-			RET(state);
+			_RET(state);
 	} break;
-	case 0xC9: RET(state); break; // RET
+	case 0xC9: _RET(state); break; // _RET
 	case 0xCA: // JZ addr
 	{
 	    if (state->cc.z)
@@ -825,7 +827,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xD0:  // RNC
 	{
 	    if (state->cc.cy == 0)
-			RET(state);
+			_RET(state);
 	} break;
 	case 0xD1:POP_D(state); break; // POP D
 	case 0xD2:  // JNC addr
@@ -842,7 +844,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xD8:  // RC
 	{
 	    if (state->cc.cy)
-			RET(state);
+			_RET(state);
 	} break;
 	case 0xDA:  // JC addr
 	{
@@ -872,7 +874,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xE0: // RPO (Parity == 0 == odd)
 	{
 	    if (state->cc.p == 0)
-			RET(state);
+			_RET(state);
 	} break;
 	case 0xE1: POP_H(state); break; // POP H
 	case 0xE2:  // JPO addr (Parity == 0 == odd)
@@ -904,7 +906,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xE8: // RPE
 	{
 	    if (state->cc.p)
-			RET(state);
+			_RET(state);
 	} break;
 	case 0xE9: // PCHL
 	{
@@ -941,7 +943,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xF0:  // RP
 	{
 	    if (state->cc.s == 0)
-			RET(state);
+			_RET(state);
 	} break;
 	case 0xF1: POP_PSW(state); break; // POP PSW
 	case 0xF2:  // JP addr
@@ -965,7 +967,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xF8:  // RM
 	{
 	    if (state->cc.s)
-			RET(state);
+			_RET(state);
 	} break;
 	case 0xF9: SPHL(state); break; // SPHL
 	case 0xFA:  // JM addr
@@ -1232,7 +1234,7 @@ int Disassemble8080Op(unsigned char *codebuffer, int pc)
 	case 0xc6: printf("ADI #$%02x", code[1]); opbytes = 2; break;
 	case 0xc7: printf("RST 0"); break;
 	case 0xc8: printf("RZ"); break;
-	case 0xc9: printf("RET"); break;
+	case 0xc9: printf("_RET"); break;
 	case 0xca: printf("JZ #$%02x%02x", code[2], code[1]); opbytes = 3; break;
 	case 0xcc: printf("CZ $%02x%02x", code[2], code[1]); opbytes = 3; break;
 	case 0xcd: printf("CALL $%02x%02x", code[2], code[1]); opbytes = 3; break;
