@@ -64,29 +64,36 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 		SDL_KeyboardEvent *e = (SDL_KeyboardEvent *) event;
 		if (e->key == SDLK_ESCAPE || e->key == SDLK_Q)
 			return SDL_APP_SUCCESS;
-		if (e->key == SDLK_C) {
-			// @TODO: Pretend a Coin was inserted, start game!
-			SDL_Log("Coin deposited!!");
-			ports[1] |= 1; // deposit CREDIT
-			// ports[1] = 0xFF;
+		if (e->down)
+		{
+			if (e->key == SDLK_C) 
+			{
+				// @TODO: Pretend a Coin was inserted, start game!
+				SDL_Log("Coin deposited!!");
+				ports[1] |= 0x1; // deposit CREDIT
+				// ports[1] = 0xFF;
+			}
+			if (e->key == SDLK_S) 
+			{
+				SDL_Log("Start please!!");
+				ports[1] |= 0b00000100;
+			}
 		}
-		if (e->key == SDLK_S) {
-			SDL_Log("Start please!!");
-			ports[1] |= 0b00000100;
+		// key released
+		if (!e->down)
+		{
+			if (e->key == SDLK_C) 
+			{
+				// @TODO: Pretend a Coin was inserted, start game!
+				SDL_Log("Coin bit cleared.");
+				ports[1] &= ~0x1; // deposit CREDIT
+			}
 		}
     }
     if (event->type == SDL_EVENT_QUIT) {
         return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
     }
     return SDL_APP_CONTINUE;
-}
-
-void GenerateInterrupt(State8080 *cpu, int interrupt_num)
-{
-	PUSH_PC(&GlobalCPU);
-	cpu->pc = 8 * interrupt_num;
-	// simulate DI
-	GlobalCPU.interrupt_enabled = 0;
 }
 
 u8 MachineIN(State8080 *cpu, u8 port)
@@ -96,13 +103,14 @@ u8 MachineIN(State8080 *cpu, u8 port)
 	if (port == 0)
 		return 1;
 	if (port == 1)
-		return 0;
+		return ports[1];
 
 	if (port == 3)
 	{
 		return ((GlobalShiftRegister >> (8-GlobalShiftOffset)) & 0xFF);
 	}
-	return ports[port];
+	return 0;
+	// return ports[port];
 }
 
 void MachineOUT(State8080 *cpu, u8 port)
@@ -124,45 +132,70 @@ void MachineOUT(State8080 *cpu, u8 port)
 /* This function runs once per frame, and is the heart of the program. */
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
-	local_persist time_t LastRenderTime;
+	time_t Now = time(NULL);
 	local_persist time_t LastInterruptTime;
+	local_persist time_t LastRenderTime;
 	local_persist bool AlternateInterrupt;
+	local_persist time_t PreviousNow;
 
-    // SDL_Delay(0.1);
-    GlobalCPU.DebugPrint = 1;
-	u8 *opcode = &GlobalCPU.memory[GlobalCPU.pc];
-	if (*opcode == 0xDB) // IN
-	{
-		u8 port = opcode[1];
-		GlobalCPU.a = MachineIN(&GlobalCPU, port);
-		GlobalCPU.pc+=2;
-	}
-	else if (*opcode == 0xD3) // OUT
-	{
-		u8 port = opcode[1];
-		MachineOUT(&GlobalCPU, port);
-		GlobalCPU.pc+=2;
-	}
-	else 
-		Emulate8080Op(&GlobalCPU);
-
-	time_t now = time(NULL);
-
-	if ((now - LastInterruptTime > 1.0/60.0) && GlobalCPU.interrupt_enabled)
+	if (GlobalCPU.interrupt_enabled && (Now - LastInterruptTime) > 1.0/60.0)
 	{
 		if (AlternateInterrupt)
+		{
 			GenerateInterrupt(&GlobalCPU, 2); // Interrupt "0x10"
+		}
 		else
+		{
 			GenerateInterrupt(&GlobalCPU, 1); // Interrupt "0x8"
+		}
 		AlternateInterrupt = !AlternateInterrupt;
 		LastInterruptTime = time(NULL);
+		SDL_Log("interrupted");
 	}
 
-	if(now - LastRenderTime > 1.0/60.0)
+	if((Now - LastRenderTime) > 1.0/60.0)
     {
 		RenderScreen();
 		LastRenderTime = time(NULL);
+		// SDL_Log("rendered");
     }
+
+    // GlobalCPU.DebugPrint = 1;
+	
+	double MillisecondDifference = (Now - PreviousNow)/1000;
+	int cycles_to_catch_up = 2 * MillisecondDifference;
+	int cycles = 0;
+	if (MillisecondDifference)
+		printf("md:%f\n",MillisecondDifference);
+
+	while(cycles_to_catch_up > cycles)
+	{
+		u8 *opcode = &GlobalCPU.memory[GlobalCPU.pc];
+		// @TODO: We're never getting to this IN stage, why?
+		// Probably a bug in the CPU emulation :/
+		if (*opcode == 0xDB) // IN
+		{
+			u8 port = opcode[1];
+			GlobalCPU.a = MachineIN(&GlobalCPU, port);
+			SDL_Log("IN happened: a: %d\n", GlobalCPU.a);
+			GlobalCPU.pc += 2;
+			cycles += 3;
+		}
+		else if (*opcode == 0xD3) // OUT
+		{
+			u8 port = opcode[1];
+			MachineOUT(&GlobalCPU, port);
+			SDL_Log("OUT happened: a: %d\n", GlobalCPU.a);
+			GlobalCPU.pc += 2;
+			cycles += 3;
+		}
+		else
+		{
+			cycles += Emulate8080Op(&GlobalCPU);
+		}
+	}
+
+	PreviousNow = Now;
 
     return SDL_APP_CONTINUE;
 }

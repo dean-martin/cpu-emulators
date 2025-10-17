@@ -4,6 +4,29 @@
 
 static bool GlobalRunning;
 
+// @TODO: don't be a copypaste dummy, do it urself bucko.
+unsigned char cycles8080[] = {
+	4, 10, 7, 5, 5, 5, 7, 4, 4, 10, 7, 5, 5, 5, 7, 4, //0x00..0x0f
+	4, 10, 7, 5, 5, 5, 7, 4, 4, 10, 7, 5, 5, 5, 7, 4, //0x10..0x1f
+	4, 10, 16, 5, 5, 5, 7, 4, 4, 10, 16, 5, 5, 5, 7, 4, //etc
+	4, 10, 13, 5, 10, 10, 10, 4, 4, 10, 13, 5, 5, 5, 7, 4,
+	
+	5, 5, 5, 5, 5, 5, 7, 5, 5, 5, 5, 5, 5, 5, 7, 5, //0x40..0x4f
+	5, 5, 5, 5, 5, 5, 7, 5, 5, 5, 5, 5, 5, 5, 7, 5,
+	5, 5, 5, 5, 5, 5, 7, 5, 5, 5, 5, 5, 5, 5, 7, 5,
+	7, 7, 7, 7, 7, 7, 7, 7, 5, 5, 5, 5, 5, 5, 7, 5,
+	
+	4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4, //0x80..8x4f
+	4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
+	4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
+	4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
+	
+	11, 10, 10, 10, 17, 11, 7, 11, 11, 10, 10, 10, 10, 17, 7, 11, //0xc0..0xcf
+	11, 10, 10, 10, 17, 11, 7, 11, 11, 10, 10, 10, 10, 17, 7, 11, 
+	11, 10, 10, 18, 17, 11, 7, 11, 11, 5, 10, 5, 17, 17, 7, 11, 
+	11, 10, 10, 4, 17, 11, 7, 11, 11, 5, 10, 4, 17, 17, 7, 11, 
+};
+
 bool InitCPU(State8080 *CPU)
 {
     // 16kb memory
@@ -11,6 +34,16 @@ bool InitCPU(State8080 *CPU)
     return CPU->memory != NULL;
 }
 
+void GenerateInterrupt(State8080 *cpu, int interrupt_num)
+{
+	PUSH_PC(cpu);
+	cpu->pc = 8 * interrupt_num;
+	// simulate DI
+	cpu->interrupt_enabled = 0;
+}
+
+// @TODO: this should be a function on the struct.
+// Might as well embrace C++
 u16 RegisterPair(State8080 *cpu, char pair)
 {
 	if (pair == 'b')
@@ -175,15 +208,15 @@ inline void _DCR_M(State8080 *state)
 
 inline void INX_RP(u8 *rh, u8 *rl)
 {
-    u16 pair = (((u16) *rh) << 8) | (u16) *rl;
+    u16 pair = (*rh << 8) | *rl;
     pair++;
     *rl = pair & 0xFF;
-    *rh = (pair >> 8) & 0xFF;
+    *rh = (pair >> 8);
 }
 
 inline void DCX_RP(u8 *rh, u8 *rl)
 {
-    u16 pair = (((u16) *rh) << 8) | (u16) *rl;
+    u16 pair = (*rh << 8) | *rl;
     pair--;
     *rl = pair & 0xFF;
     *rh = (pair >> 8) & 0xFF;
@@ -197,15 +230,6 @@ inline void DAD_RP(State8080 *state, u8 rh, u8 rl)
     state->cc.cy = (hl & 0xffff0000) != 0;
     state->l = (hl & 0xFF);
     state->h = hl >> 8;
-}
-
-inline void
-_LHLD(State8080 *state)
-{
-	u8 addr = state->pc+1;
-	state->l = state->memory[addr];
-	state->h = state->memory[addr+1];
-	state->pc+=2;
 }
 
 inline void _DAA(State8080 *state)
@@ -425,7 +449,7 @@ PUSH_H(State8080 *state)
 inline void
 PUSH_PC(State8080 *state)
 {
-	WriteMemory(state, state->sp-1, ((state->pc & 0xFF00) >> 8));
+	WriteMemory(state, state->sp-1, (state->pc >> 8));
 	WriteMemory(state, state->sp-2, (state->pc & 0xFF));
 	state->sp -= 2;
 }
@@ -500,7 +524,6 @@ inline void
 LDAX(State8080 *state, u8 *rp)
 {
     u16 offset = (*rp << 8) | *(rp+1);
-    // printf("offset: 0x%04x\n", offset);
     state->a = state->memory[offset];
 }
 
@@ -537,15 +560,11 @@ int Emulate8080Op(State8080 *state)
 
     switch(*opcode)
     {
-        case NOP: break;   // NOP is easy!
-        case 0x01: {	    // LXI  B,word
-	    state->c = opcode[1];
-	    state->b = opcode[2];
-	    state->pc += 2;
-	} break;
+	case NOP: break;   // NOP is easy!
+	case 0x01: LXI_RP(state, &state->b); break;
 	case 0x02:
 	{
-		u16 addr = (state->b << 8) | (state->c & 0xFF);
+		u16 addr = (state->b << 8) | state->c;
 		WriteMemory(state, addr, state->a);
 	} break;
 	case 0x03: INX_RP(&state->b, &state->c); break;	// INX B
@@ -588,7 +607,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x21: LXI_RP(state, &state->h); break;   // LXI H
 	case 0x22:	// SHLD addr
 	{
-		u8 addr = state->pc+1;
+		u16 addr = (opcode[2] << 8) | opcode[1];
 		state->memory[addr] = state->l;
 		state->memory[addr+1] = state->h;
 		state->pc+=2;
@@ -600,7 +619,13 @@ int Emulate8080Op(State8080 *state)
 	case 0x27: _DAA(state); break;	// DAA
 
 	case 0x29: DAD_RP(state, state->h, state->l); break;	// DAD H
-	case 0x2a: _LHLD(state); break;	// LHLD addr
+	case 0x2a:	// LHLD addr
+	{
+		u16 addr = opcode[2] << 8 | opcode[1];
+		state->l = state->memory[addr];
+		state->h = state->memory[addr+1];
+		state->pc += 2;
+	} break;
 	case 0x2B: DCX_RP(&state->h, &state->l); break;	// DCX H
 	case 0x2c: process_flags_nc(state, ++state->l); break;	// INR L
 	case 0x2d: process_flags_nc(state, --state->l); break;	// DCR L
@@ -983,7 +1008,7 @@ int Emulate8080Op(State8080 *state)
 		state->e, state->h, state->l, state->sp);
     }
 
-    return 0;
+    return cycles8080[*opcode];
 }
 
 int ParseInt(char *str)

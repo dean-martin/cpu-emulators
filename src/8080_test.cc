@@ -9,6 +9,145 @@ void pass(const char *msg);
 void fail(const char *msg);
 void reset(State8080 *cpu);
 
+void test_LHLD(State8080 *cpu)
+{
+// LHLD addr		(Load Hand L direct)
+// (L) <- ((byte 3)(byte 2))
+// (H) <- ((byte 3) (byte 2) + 1)
+// The content of the memory location, whose address
+// is specified in byte 2 and byte 3 of the instruction, is
+// moved to register L. The content of the memory loca-
+// tion at the succeeding address is moved to register H.
+	reset(cpu);
+	cpu->memory[0] = LHLD;
+	cpu->memory[1] = 0x34; // low-order data (byte 2)
+	cpu->memory[2] = 0x12; // high-order data (byte 3)
+	cpu->memory[0x1234] = 0x42;
+	cpu->memory[0x1235] = 0x73;
+	Emulate8080Op(cpu);
+
+	assert(cpu->l == 0x42);
+	assert(cpu->h == 0x73);
+
+	pass("LHLD passed\n");
+}
+
+void test_SHLD(State8080 *cpu)
+{
+// SHLD addr		(Store Hand L direct)
+// ((byte 3) (byte 2)) <- (L)
+// ((byte 3)(byte 2) + 1) <- (H)
+// The content of register L is moved to the memory Jo-
+// cation whose address is specified in byte 2 and byte
+// 3. The content of register H is moved to the succeed-
+// ing memory location.
+	reset(cpu);
+	cpu->l = 0x11;
+	cpu->h = 0x22;
+	cpu->memory[0] = SHLD;
+	cpu->memory[1] = 0x34; // low-order data (byte 2)
+	cpu->memory[2] = 0x12; // high-order data (byte 3)
+	Emulate8080Op(cpu);
+
+	assert(cpu->memory[0x1234] == 0x11);
+	assert(cpu->memory[0x1235] == 0x22);
+}
+
+void test_LXI_RP(State8080 *cpu)
+{
+// LXI rp, data 16		(Load register pair immediate)
+// (rh) <- (byte 3),
+// (rl) <- (byte 2)
+// Byte 3 of the instruction is moved into the high-order
+// register (rh) of the register pair rp. Byte 2 of the in-
+// struction is moved into the low-order register (rl) of
+// the register pair rp.
+	reset(cpu);
+	// B
+	cpu->memory[0] = LXI_B;
+	cpu->memory[1] = 0x34; // low-order data (byte 2)
+	cpu->memory[2] = 0x12; // high-order data (byte 3)
+	Emulate8080Op(cpu);
+	assert(cpu->b == 0x12);
+	assert(cpu->c == 0x34);
+
+	// D
+	reset(cpu);
+	cpu->memory[0] = LXI_D;
+	cpu->memory[1] = 0x34; // low-order data (byte 2)
+	cpu->memory[2] = 0x12; // high-order data (byte 3)
+	Emulate8080Op(cpu);
+	assert(cpu->d == 0x12);
+	assert(cpu->e == 0x34);
+
+	// H
+	reset(cpu);
+	cpu->memory[0] = LXI_H;
+	cpu->memory[1] = 0x34; // low-order data (byte 2)
+	cpu->memory[2] = 0x12; // high-order data (byte 3)
+	Emulate8080Op(cpu);
+	assert(cpu->h == 0x12);
+	assert(cpu->l == 0x34);
+
+	pass("LXI_RP passed\n");
+}
+
+void test_LDAX(State8080 *cpu)
+{
+// LOAX rp	(Load accumulator indirect)
+// (A) <- ((rp))
+// The content of the memory location, whose address
+// is in the register pair rp, is moved to register A. Note:
+// only register pairs rp=B (registers B and C·) or rp=D
+// (registers D and E) may be specified.
+	// B
+	reset(cpu);
+	cpu->b = 0x12;
+	cpu->c = 0x34;
+	cpu->memory[0x1234] = 0x69;
+	cpu->memory[0] = LDAX_B;
+	Emulate8080Op(cpu);
+	assert(cpu->a == 0x69);
+
+	// D
+	reset(cpu);
+	cpu->d = 0x12;
+	cpu->e = 0x34;
+	cpu->memory[0x1234] = 0x69;
+	cpu->memory[0] = LDAX_D;
+	Emulate8080Op(cpu);
+	assert(cpu->a == 0x69);
+
+	pass("LDAX passed\n");
+}
+
+void test_INX_RP(State8080 *cpu)
+{
+// INX rp	(Increment register pair)
+// (rh) (rl) <- (rh) (rl) + 1
+// The content of the register pair rp is incremented by
+// one. Note: No condition flags are affected.
+	reset(cpu);
+	cpu->b = 0;
+	cpu->c = 0xFF;
+	cpu->memory[0] = INX_B;
+	Emulate8080Op(cpu);
+	assert(RegisterPair(cpu, 'b') == 0x00FF+1);
+
+	// @TODO: other registers
+
+	// @TODO: separate test
+	// INR B
+	reset(cpu);
+	cpu->b = 0xFF;
+	cpu->cc.z = 0;
+	cpu->memory[0] = INR_B;
+	Emulate8080Op(cpu);
+	assert(cpu->cc.z == 1);
+
+	pass("INX_RP passed\n");
+}
+
 void test_JNZ(State8080 *cpu)
 {
 // Jcondition addr	(Conditional jump)
@@ -22,7 +161,6 @@ void test_JNZ(State8080 *cpu)
 	// JNZ
 	// CCC == 000
 	// NZ = not zero (Z = 0) (condition flags)
-
 
 }
 
@@ -348,8 +486,13 @@ int main(int argc, char **argv)
 	{
 		fail("failed to init CPU\n");
 	}
+	test_INX_RP(&State);
+	test_LXI_RP(&State);
+	test_LDAX(&State);
+	test_SHLD(&State);
 	test_LDA(&State);
 	test_ADD(&State);
+	test_LHLD(&State);
 	test_DCR(&State);
 	test_DAD_RP(&State);
 	test_DCX_RP(&State);
