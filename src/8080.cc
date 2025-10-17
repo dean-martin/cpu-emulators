@@ -312,12 +312,6 @@ RST(State8080 *state, u8 NNN)
 }
 
 inline void
-PCHL(State8080 *state)
-{
-    state->pc = (state->h << 8) | state->l;
-}
-
-inline void
 ANA(State8080 *state, u8 r)
 {
     state->a = state->a & r;
@@ -707,9 +701,9 @@ int Emulate8080Op(State8080 *state)
 	case 0x77: *MemoryLocation(state) = state->a; break; // MOV M,A
 	case 0x78: state->a = state->b; break;	// MOV A,B
 	case 0x79: state->a = state->c; break;	// MOV A,C
-	case 0x7D: state->a = state->l; break;	// MOV A,L
 	case 0x7A: state->a = state->d; break;	// MOV A,D
 	case 0x7B: state->a = state->e; break;	// MOV A,E
+	case 0x7D: state->a = state->l; break;	// MOV A,L
 	case 0x7E: state->a = *MemoryLocation(state); break;	// MOV A,M
 	case 0x80: ADD(state, state->b); break; // ADD B
 	case 0x81: ADD(state, state->c); break; // ADD C
@@ -778,15 +772,15 @@ int Emulate8080Op(State8080 *state)
 	case 0xC0: // RNZ
 	{
 	    if (state->cc.z == 0)
-		RET(state);
+			RET(state);
 	} break;
 	case 0xC1: POP_B(state); break; // POP_B
 	case 0xC2:  // JNZ addr
 	{
 	    if (state->cc.z == 0)
-		JMP(state);
+			JMP(state);
 	    else
-		state->pc += 2;
+			state->pc += 2;
 	} break;
 	case 0xC3:  // JMP addr
 	{
@@ -804,22 +798,22 @@ int Emulate8080Op(State8080 *state)
 	case 0xC8: // RZ
 	{
 	    if (state->cc.z)
-		RET(state);
+			RET(state);
 	} break;
 	case 0xC9: RET(state); break; // RET
 	case 0xCA: // JZ addr
 	{
 	    if (state->cc.z)
-		JMP(state);
+			JMP(state);
 	    else
-		state->pc += 2;
+			state->pc += 2;
 	} break;
 	case 0xCC:  // CZ addr
 	{
 	    if (state->cc.z)
-		_CALL(state);
+			_CALL(state);
 	    else
-		state->pc += 2;
+			state->pc += 2;
 	} break;
 	case 0xCD:  // _CALL addr
 	{
@@ -831,15 +825,15 @@ int Emulate8080Op(State8080 *state)
 	case 0xD0:  // RNC
 	{
 	    if (state->cc.cy == 0)
-		RET(state);
+			RET(state);
 	} break;
 	case 0xD1:POP_D(state); break; // POP D
 	case 0xD2:  // JNC addr
 	{
 	    if (state->cc.cy == 0)
-		JMP(state);
+			JMP(state);
 	    else
-		state->pc += 2;
+			state->pc += 2;
 	} break;
 	case 0xD3: OUT(state); break; // OUT byte
 	case 0xD5: PUSH_D(state); break; // PUSH D
@@ -848,29 +842,29 @@ int Emulate8080Op(State8080 *state)
 	case 0xD8:  // RC
 	{
 	    if (state->cc.cy)
-		RET(state);
+			RET(state);
 	} break;
 	case 0xDA:  // JC addr
 	{
 	    if (state->cc.cy)
-		JMP(state);
+			JMP(state);
 	    else
-		state->pc += 2;
+			state->pc += 2;
 	} break;
 	case 0xDB: IN(state); break; // IN byte
 	case 0xD4:  // CNC addr
 	{
 	    if (state->cc.cy == 0)
-		_CALL(state);
+			_CALL(state);
 	    else
-		state->pc += 2;
+			state->pc += 2;
 	} break;
 	case 0xDC:  // CC addr
 	{
 	    if (state->cc.cy)
-		_CALL(state);
+			_CALL(state);
 	    else
-		state->pc += 2;
+			state->pc += 2;
 	} break;
 	case 0xDE: SBB(state, opcode[1]); state->pc++; break; // SBI word
 	case 0xDF: RST(state, 3); break; // RST 3
@@ -878,23 +872,23 @@ int Emulate8080Op(State8080 *state)
 	case 0xE0: // RPO (Parity == 0 == odd)
 	{
 	    if (state->cc.p == 0)
-		RET(state);
+			RET(state);
 	} break;
 	case 0xE1: POP_H(state); break; // POP H
 	case 0xE2:  // JPO addr (Parity == 0 == odd)
 	{
 	    if (state->cc.p == 0)
-		JMP(state);
+			JMP(state);
 	    else
-		state->pc += 2;
+			state->pc += 2;
 	} break;
 	case 0xE3: XTHL(state); break;	// XTHL
 	case 0xE4:  // CPO addr
 	{
 	    if (state->cc.p == 0)
-		_CALL(state);
+			_CALL(state);
 	    else
-		state->pc += 2;
+			state->pc += 2;
 	} break;
 	case 0xE5: PUSH_H(state); break; // PUSH H
 	case 0xE6:  // ANI  byte
@@ -910,11 +904,11 @@ int Emulate8080Op(State8080 *state)
 	case 0xE8: // RPE
 	{
 	    if (state->cc.p)
-		RET(state);
+			RET(state);
 	} break;
 	case 0xE9: // PCHL
 	{
-	    PCHL(state);
+		state->pc = (state->h << 8) | state->l;
 
 	    // @TODO: why am i returning here?
 	    return 0;
@@ -922,9 +916,9 @@ int Emulate8080Op(State8080 *state)
 	case 0xEA:  // JPE addr (Parity == 1 == even)
 	{
 	    if (state->cc.p)
-		JMP(state);
+			JMP(state);
 	    else
-		state->pc += 2;
+			state->pc += 2;
 	} break;
 	case 0xEB: //XCHG
 	{
@@ -938,32 +932,32 @@ int Emulate8080Op(State8080 *state)
 	case 0xEC:  // CPE addr
 	{
 	    if (state->cc.p)
-		_CALL(state);
+			_CALL(state);
 	    else
-		state->pc += 2;
+			state->pc += 2;
 	} break;
 	case 0xEE: XRI(state); state->pc++; break; // XRI byte
 	case 0xEF: RST(state, 5); break; // RST 5
 	case 0xF0:  // RP
 	{
 	    if (state->cc.s == 0)
-		RET(state);
+			RET(state);
 	} break;
 	case 0xF1: POP_PSW(state); break; // POP PSW
 	case 0xF2:  // JP addr
 	{
 	    if (state->cc.s == 0)
-		JMP(state);
+			JMP(state);
 	    else
-		state->pc += 2;
+			state->pc += 2;
 	} break;
 	case 0xF3:  state->interrupt_enabled = 0; break; // DI
 	case 0xF4:  // CP addr
 	{
 	    if (state->cc.s == 0)
-		_CALL(state);
+			_CALL(state);
 	    else
-		state->pc += 2;
+			state->pc += 2;
 	} break;
 	case 0xF5: PUSH_PSW(state); break; // PUSH PSW
 	case 0xF6: ORA(state, state->memory[state->pc+1]); state->pc++; break; // ORI data
@@ -977,17 +971,17 @@ int Emulate8080Op(State8080 *state)
 	case 0xFA:  // JM addr
 	{
 	    if (state->cc.s)
-		JMP(state);
+			JMP(state);
 	    else
-		state->pc += 2;
+			state->pc += 2;
 	} break;
 	case 0xFB:  state->interrupt_enabled = 1; break; // EI
 	case 0xFC:  // CM addr
 	{
 	    if (state->cc.s)
-		_CALL(state);
+			_CALL(state);
 	    else
-		state->pc += 2;
+			state->pc += 2;
 	} break;
         case 0xFE:  // CPI byte
 	{
@@ -998,14 +992,14 @@ int Emulate8080Op(State8080 *state)
 	default: UnimplementedInstruction(state); break;
     }
     state->pc += 1;
-    /* print out processor state */
+    // print out processor state
     if (state->DebugPrint) {
-	printf("\tStep: %lld\n", state->Steps);
-	printf("\tC=%d,P=%d,S=%d,Z=%d\n", state->cc.cy, state->cc.p,
-		state->cc.s, state->cc.z);
-	printf("\tA $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP %04x\n",
-		state->a, state->b, state->c, state->d,
-		state->e, state->h, state->l, state->sp);
+		printf("\tStep: %lld\n", state->Steps);
+		printf("\tC=%d,P=%d,S=%d,Z=%d\n", state->cc.cy, state->cc.p,
+			state->cc.s, state->cc.z);
+		printf("\tA $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP %04x\n",
+			state->a, state->b, state->c, state->d,
+			state->e, state->h, state->l, state->sp);
     }
 
     return cycles8080[*opcode];
