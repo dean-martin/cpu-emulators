@@ -39,21 +39,33 @@ void test_CALL(State8080 *cpu)
 
 	assert(cpu->memory[0x2000-1] == 0x01);
 	assert(cpu->memory[0x2000-2] == 0x03);
-	assert(cpu->sp == 0x1ffe);
+	assert(cpu->sp == 0x2000-2);
 	assert(cpu->pc == 0x6942);
 
 	// INR_A
 	Emulate8080Op(cpu);
 	assert(cpu->a == 1);
-	// RET
+
+// RET		(Return)
+// 	(PCL) <- ((SP));
+// 	(PCH) <- ((SP) + 1);
+// 	(SP) <- (SP) + 2;
+// The content of the memory location whose address
+// is specified in register SP is moved to the low-order
+// eight bits of register PC. The content of the memory
+// location whose address is one more than the content
+// of register SP is moved to the high-order eight bits of
+// register PC. The content of register SP is incremented
+// by 2.
 	Emulate8080Op(cpu);
 	assert(cpu->pc == 0x103);
+	assert(cpu->sp == 0x2000);
 
-	// INR_C
+	// INR_C (The next instruction after CALL)
 	Emulate8080Op(cpu);
 	assert(cpu->c == 1);
 
-	pass("CALL passed\n");
+	pass("CALL + RET passed\n");
 }
 
 void test_LHLD(State8080 *cpu)

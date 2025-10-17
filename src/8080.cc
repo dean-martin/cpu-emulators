@@ -288,19 +288,11 @@ JMP(State8080 *state)
 inline void
 _RET(State8080 *state)
 {
-    bytes b;
-    b.low = state->memory[state->sp];
-    b.high = state->memory[state->sp+1];
-
-    state->pc = state->memory[state->sp] | (state->memory[state->sp+1] << 8);
-    if (state->pc != b.data) {
-		fprintf(stderr, "AHHHHHHHHHHHHHH");
-		exit(1);
-    }
+	u16 ReturnAddress = Word16(state->memory[state->sp+1], state->memory[state->sp]);
+    state->pc = ReturnAddress;
+    state->sp += 2;
 	// @TODO: revise: this is for the ++ after switch statement
 	state->pc--;
-    // state->pc = b.data;
-    state->sp += 2;
 }
 
 inline void
