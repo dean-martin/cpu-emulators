@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <string.h>
 #include <errno.h>
+#include <limits.h>
 
 #ifndef __cplusplus__
 #define inline  
@@ -42,7 +43,7 @@ typedef struct State8080 {
 
     ConditionCodes cc;
 
-    bool DebugPrint;
+    bool debug;
     u64 Steps;
 
     u8 int_enable;
@@ -74,6 +75,8 @@ bool InitCPU(State8080 *CPU);
 int Disassemble8080Op(unsigned char *buffer, int pc);
 int Emulate8080Op(State8080 *state);
 int LoadROMFile(State8080 *state, const char *FileName);
+
+void Debug(State8080 *cpu);
 
 inline void
 PUSH_PC(State8080 *state);
@@ -168,5 +171,7 @@ PUSH_PC(State8080 *state);
 #define ANA_M 0xa6
 #define ANA_A 0xa7
 
+#define JNZ 0xc2
+#define JMP 0xc3
 #define RET 0xC9
 #define CALL 0xcd

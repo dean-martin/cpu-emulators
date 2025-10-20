@@ -1,6 +1,6 @@
 #include "8080.h"
 
-// @TODO: fix JMP, ugly and broken
+// @TODO: revise program counter advancement, it's kinda whack.
 
 static bool GlobalRunning;
 
@@ -277,13 +277,13 @@ _CALL(State8080 *state)
 }
 
 inline void
-JMP(State8080 *state)
+_JMP(State8080 *state)
 {
     u8 *opcode = &state->memory[state->pc];
     state->pc = (opcode[2] << 8) | opcode[1];
-    // @TODO: adjust
-	// @TODO: holy test this hot garbage
-    // state->pc--;
+    // @TODO: revise
+	assert(state->pc != 0);
+    state->pc--;
 }
 
 inline void
@@ -544,8 +544,11 @@ int Emulate8080Op(State8080 *state)
 {
     state->Steps++;
     u8 *opcode = &state->memory[state->pc];
-    if (state->DebugPrint)
-		Disassemble8080Op(state->memory, state->pc);
+
+    if (state->debug) {
+		Debug(state);
+		getchar();
+    }
 
     switch(*opcode)
     {
@@ -591,6 +594,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x1B: DCX_RP(&state->d, &state->e); break;	// DCX D
 	case 0x1c: process_flags_nc(state, ++state->e); break;	// INR E
 	case 0x1d: process_flags_nc(state, --state->e); break;	// DCR E
+	case 0x1e: state->e = opcode[1]; state->pc++; break;	// MVI E,D8
 	case 0x1F: _RAR(state); break; // RAR
 	// --
 	case 0x21: LXI_RP(state, &state->h); break;   // LXI H
@@ -773,13 +777,13 @@ int Emulate8080Op(State8080 *state)
 	case 0xC2:  // JNZ addr
 	{
 	    if (state->cc.z == 0)
-			JMP(state);
+			_JMP(state);
 	    else
 			state->pc += 2;
 	} break;
 	case 0xC3:  // JMP addr
 	{
-	    JMP(state);
+	    _JMP(state);
 	} break;
 	case 0xC4:  // CNZ addr
 	{
@@ -799,7 +803,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xCA: // JZ addr
 	{
 	    if (state->cc.z)
-			JMP(state);
+			_JMP(state);
 	    else
 			state->pc += 2;
 	} break;
@@ -826,7 +830,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xD2:  // JNC addr
 	{
 	    if (state->cc.cy == 0)
-			JMP(state);
+			_JMP(state);
 	    else
 			state->pc += 2;
 	} break;
@@ -842,7 +846,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xDA:  // JC addr
 	{
 	    if (state->cc.cy)
-			JMP(state);
+			_JMP(state);
 	    else
 			state->pc += 2;
 	} break;
@@ -873,7 +877,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xE2:  // JPO addr (Parity == 0 == odd)
 	{
 	    if (state->cc.p == 0)
-			JMP(state);
+			_JMP(state);
 	    else
 			state->pc += 2;
 	} break;
@@ -890,7 +894,7 @@ int Emulate8080Op(State8080 *state)
 	{
 	    u8 x = state->a & opcode[1];
 	    process_flags(state, x);
-	    state->cc.cy = (0x80 == (x & 0x80)); // i kinda like this better
+		// @TODO: wtf? there's an AC flag?
 	    state->cc.cy = 0; // data book says ANI clears CY
 	    state->a = x;
 	    state->pc++; // for the data byte
@@ -911,7 +915,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xEA:  // JPE addr (Parity == 1 == even)
 	{
 	    if (state->cc.p)
-			JMP(state);
+			_JMP(state);
 	    else
 			state->pc += 2;
 	} break;
@@ -942,7 +946,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xF2:  // JP addr
 	{
 	    if (state->cc.s == 0)
-			JMP(state);
+			_JMP(state);
 	    else
 			state->pc += 2;
 	} break;
@@ -966,7 +970,7 @@ int Emulate8080Op(State8080 *state)
 	case 0xFA:  // JM addr
 	{
 	    if (state->cc.s)
-			JMP(state);
+			_JMP(state);
 	    else
 			state->pc += 2;
 	} break;
@@ -986,18 +990,24 @@ int Emulate8080Op(State8080 *state)
 	case 0xFF: RST(state, 7); break; // RST 7
 	default: UnimplementedInstruction(state); break;
     }
+
+	// @TODO: move to top, refactor all functions >:(
     state->pc += 1;
-    // print out processor state
-    if (state->DebugPrint) {
-		printf("\tStep: %lld\n", state->Steps);
-		printf("\tC=%d,P=%d,S=%d,Z=%d\n", state->cc.cy, state->cc.p,
-			state->cc.s, state->cc.z);
-		printf("\tA $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP %04x\n",
-			state->a, state->b, state->c, state->d,
-			state->e, state->h, state->l, state->sp);
-    }
 
     return cycles8080[*opcode];
+}
+
+void Debug(State8080 *cpu)
+{
+	Disassemble8080Op(cpu->memory, cpu->pc);
+	printf("\tStep: %lld\n", cpu->Steps);
+	printf("\tC=%d,P=%d,S=%d,Z=%d\n", cpu->cc.cy, cpu->cc.p,
+		cpu->cc.s, cpu->cc.z);
+	printf("\tA $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP 0x%04x\n",
+		cpu->a, cpu->b, cpu->c, cpu->d,
+		cpu->e, cpu->h, cpu->l, cpu->sp);
+	u16 spm = cpu->memory[cpu->sp] << 8 | cpu->memory[cpu->sp-1];
+	printf("(SP): 0x%04x\n", spm);
 }
 
 int ParseInt(char *str)
@@ -1041,7 +1051,7 @@ int Disassemble8080Op(unsigned char *codebuffer, int pc)
 {
     unsigned char *code = &codebuffer[pc];
     int opbytes = 1;
-    printf("%04x ", pc);
+    printf("PC: 0x%04x ", pc);
     //printf("0x%02x ", *code);
     char *codebin = (char *)malloc(sizeof(char[9]));
 	ByteToBinary(*code, codebin);
@@ -1234,7 +1244,7 @@ int Disassemble8080Op(unsigned char *codebuffer, int pc)
 	case 0xc6: printf("ADI #$%02x", code[1]); opbytes = 2; break;
 	case 0xc7: printf("RST 0"); break;
 	case 0xc8: printf("RZ"); break;
-	case 0xc9: printf("_RET"); break;
+	case 0xc9: printf("RET"); break;
 	case 0xca: printf("JZ #$%02x%02x", code[2], code[1]); opbytes = 3; break;
 	case 0xcc: printf("CZ $%02x%02x", code[2], code[1]); opbytes = 3; break;
 	case 0xcd: printf("CALL $%02x%02x", code[2], code[1]); opbytes = 3; break;

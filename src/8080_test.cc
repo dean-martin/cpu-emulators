@@ -127,7 +127,6 @@ void test_LXI_RP(State8080 *cpu)
 	cpu->memory[1] = 0x34; // low-order data (byte 2)
 	cpu->memory[2] = 0x12; // high-order data (byte 3)
 	Emulate8080Op(cpu);
-	PrintBinary(cpu->b);
 	assert(cpu->b == 0x12);
 	assert(cpu->c == 0x34);
 
@@ -208,7 +207,43 @@ void test_INX_RP(State8080 *cpu)
 	pass("INX_RP passed\n");
 }
 
+// @TODO: an automated compliance test with steps progressed in the program
+// counter would be welcome.
+
 // @TODO: test
+void test_ANI(State8080 *cpu);
+
+
+void test_RRC(State8080 *cpu)
+{
+// RCC	(Rotate right)
+// (A[n]) <- (A[n-1]); (A[7]) <- (A[0])
+// (CY) <- (A[0])
+// The content of the accumulator is rotated right one
+// position. The high order bit and the CY flag are both
+// set to the value shifted out of the low order bit posi-
+// tion. Only the CY flag is affected.
+	reset(cpu);
+	cpu->a = 0b01000001;
+	cpu->memory[0] = RRC;
+	Emulate8080Op(cpu);
+
+	assert(cpu->a == 0b10100000);
+	assert(cpu->cc.cy == 1);
+
+	// arrange
+	reset(cpu);
+	cpu->a = 0b00000010;
+	cpu->memory[0] = RRC;
+	Emulate8080Op(cpu);
+
+	// act
+	assert(cpu->a == 0b00000001);
+	assert(cpu->cc.cy == 0);
+
+	pass("RCC passed\n");
+}
+
 void test_JNZ(State8080 *cpu)
 {
 // Jcondition addr	(Conditional jump)
@@ -222,7 +257,26 @@ void test_JNZ(State8080 *cpu)
 	// JNZ
 	// CCC == 000
 	// NZ = not zero (Z = 0) (condition flags)
+	reset(cpu);
+	cpu->memory[0] = JNZ;
+	cpu->memory[1] = 0x33;
+	cpu->memory[2] = 0x44;
+	cpu->memory[0x4433] = JMP;
+	cpu->memory[0x4434] = 0x55;
+	cpu->memory[0x4435] = 0x66;
+	Emulate8080Op(cpu);
 
+	assert(cpu->pc == 0x4433);
+
+	// JMP
+	Emulate8080Op(cpu);
+	assert(cpu->pc == 0x6655);
+
+	cpu->memory[0x6655] = INR_A;
+	Emulate8080Op(cpu);
+	assert(cpu->a == 1);
+
+	pass("JNZ passed\n");
 }
 
 // @TODO: Assert flag changes
@@ -560,6 +614,8 @@ int main(int argc, char **argv)
 	test_STAX_D(&State);
 	test_ANA(&State);
 	test_CALL(&State);
+	test_JNZ(&State);
+	test_RRC(&State);
 	printf("tests finished\n");
 }
 

@@ -154,8 +154,8 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
 		if (e->key == SDLK_D)
 		{
-			app.cpu.DebugPrint = app.cpu.DebugPrint ? 0 : 1;
-			SDL_Log("debug print: %d", app.cpu.DebugPrint);
+			app.cpu.debug = app.cpu.debug ? 0 : 1;
+			SDL_Log("debug print: %d", app.cpu.debug);
 		}
 
 		// key released
@@ -242,7 +242,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	// @TODO: fix
 	double MillisecondDifference = (Now - PreviousNow)/1000;
 	int cycles_to_catch_up = 2 * MillisecondDifference;
-	cycles_to_catch_up+=10; //lol
+	cycles_to_catch_up+=1; //lol
 	int cycles = 0;
 	if (MillisecondDifference)
 		printf("md:%f\n",MillisecondDifference);
@@ -252,6 +252,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 		u8 *opcode = &app.cpu.memory[app.cpu.pc];
 		if (*opcode == 0xDB) // IN
 		{
+			Debug(&app.cpu);
 			u8 port = opcode[1];
 			app.cpu.a = MachineIN(&app.cpu, port);
 
@@ -265,6 +266,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 		}
 		else if (*opcode == 0xD3) // OUT
 		{
+			Debug(&app.cpu);
 			u8 port = opcode[1];
 			MachineOUT(&app.cpu, port);
 
