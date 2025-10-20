@@ -23,6 +23,84 @@ typedef struct {
 
 App app;
 
+// @TODO: disassembler is inconsistant with literal hex, address hex, and memory hex
+// i.e., #01, $006c, ($006c)
+// review.
+
+// An advanced debugging framework would be amazing here, saving and reloading state,
+// and a UI to inspect memory and what not. Naming functions at addresses, etc.
+// A real debugger for 8080 cpu emulation.
+
+// PC at 0x0020 is IN#0x01
+// RRC checks start at 0x0022
+// Port 1 is 0b00001111
+// JC $0067
+// MVI A, #$01
+// STA ($20ea) (this is what gets checked later on?)
+// 0x006c JMP $003f
+// 0x003f STA($20ea) (why are we storing this twice? what)
+// 0x0042 LDA $20e9
+// ANA A -- C=1
+// 0x0046 JZ #$0082
+// 0x0049 LDA $20ef
+// ANA A
+// JNZ $006f
+// 0x0050 LDA $20eb
+//
+// This routine loads a byte into memory, then RRC offs to check the first 3 bits.
+// Where is the $20ca write then?
+// CALL $0abf -- This starts a common routine?
+// LDA $20ca
+// RRC
+// JC $0abb
+// RRC
+// JC $1868
+// RRC
+// JC $0aab
+// RET
+// 0x005a JMP $0082 -- restarting the loop?
+// yup, popping registers into the stack to then Enable Input (EI)
+// 0x000c JMP $008c -- this does some XRA A and wierdness, to clear the CY bit?
+// XRA A
+// STA ($2072)
+// 0x0090 LDA $20e9
+// ANA A
+// JZ #$0082
+// 0x0097(cont) LDA $20ef
+// ANA A
+// 0x009b JNZ $00a5
+// 0x009e LDA $20c1
+// RRC
+// JNC #$0082
+// POP H
+// POP D
+// POP B
+// POP PSW
+// EI
+// ...
+// -- this is the TILT check, neat. does early return if fine.
+// 0x001d CALL $17cd
+// 0x17cd IN #0x02 (port "2")
+// ANI #$04
+// RZ (Z=1)
+// 0x0020 IN #0x01 (port "1") (00001111) I think this was input?
+// 0x0022 RRC
+// 0x0023 JC $0067 
+// 0x0067 MVI A, #$01
+// 0x0069 STA ($20ea)
+// 0x006c JMP $003f
+// 0x003f STA ($20ea)
+
+// don't understand, it's checking $20xx area, (considered RAM in SpaceInvaders iirc)
+// but storing input in places it doesn't check later on? Is there a bug in the emulation?
+// Storing to: $2072, $20ea
+// Loading from: $20e9, $20ef,$20ca, $20c1
+
+// I might have it stuck in a early boot loop with an input flag that's suppose
+// to clear later on. Yeah, I shifted up the ports (n+1 = n), and that was definitely wrong.
+// Port[2] is definitely the TILT check using 0x04
+// okay, retrying with what I think are "
+
 // @see: https://www.computerarcheology.com/Arcade/SpaceInvaders/Hardware.html#inputs
 static u8 InputPorts[8+1] = {
 // Port 0
@@ -34,7 +112,8 @@ static u8 InputPorts[8+1] = {
 //  bit 5 Left
 //  bit 6 Right
 //  bit 7 ? tied to demux port 7 ?
-	0b00001110, // Port 0
+	0b00000001, // Port 0
+
 
 // Port 1
 //  bit 0 = CREDIT (1 if deposit)
@@ -45,7 +124,7 @@ static u8 InputPorts[8+1] = {
 //  bit 5 = 1P left (1 if pressed)
 //  bit 6 = 1P right (1 if pressed)
 //  bit 7 = Not connected
-	0b00001000, // Port 1
+	0b00001001, // Port 1
 
 // Port 2
 //  bit 0 = DIP3 00 = 3 ships  10 = 5 ships
@@ -132,12 +211,12 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 {
     if(event->type == SDL_EVENT_KEY_DOWN)
     {
-		SDL_KeyboardEvent *e = (SDL_KeyboardEvent *) event;
-		if (e->key == SDLK_ESCAPE || e->key == SDLK_Q)
+		SDL_KeyboardEvent e = event->key;
+		if (e.key == SDLK_ESCAPE || e.key == SDLK_Q)
 			return SDL_APP_SUCCESS;
-		if (e->down)
+		if (e.down)
 		{
-			if (e->key == SDLK_C) 
+			if (e.key == SDLK_C) 
 			{
 				// @TODO: Pretend a Coin was inserted, start game!
 				// PrintBinary(InputPorts[1]);
@@ -145,23 +224,23 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 				// PrintBinary(InputPorts[1]);
 				SDL_Log("Coin deposited!!");
 			}
-			if (e->key == SDLK_S) 
+			if (e.key == SDLK_S) 
 			{
 				SDL_Log("Start please!!");
 				InputPorts[1] |= 0b00000100;
 			}
 		}
 
-		if (e->key == SDLK_D)
+		if (e.key == SDLK_D)
 		{
 			app.cpu.debug = app.cpu.debug ? 0 : 1;
 			SDL_Log("debug print: %d", app.cpu.debug);
 		}
 
 		// key released
-		if (!e->down)
+		if (!e.down)
 		{
-			if (e->key == SDLK_C) 
+			if (e.key == SDLK_C) 
 			{
 				// @TODO: Pretend a Coin was inserted, start game!
 				SDL_Log("Coin bit cleared.");
@@ -178,8 +257,8 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 u8 MachineIN(State8080 *cpu, u8 port)
 {
 	// // This enables attract mode?
-	if (port == 0)
-		return 1;
+	// if (port == 0)
+	// 	return 1;
 
 	if (port == 3)
 	{
@@ -263,6 +342,12 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
 			app.cpu.pc += 2;
 			cycles += 3;
+
+			// @TODO: clear input bits on ports
+			// Clear all input bits, except bit 3 which is always 1 for some reason.
+			if (port == 1)
+				InputPorts[1] &= 0b00001000;
+			// input 2 and 0 need to be cleared too
 		}
 		else if (*opcode == 0xD3) // OUT
 		{

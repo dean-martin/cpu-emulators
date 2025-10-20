@@ -9,6 +9,17 @@ void pass(const char *msg);
 void fail(const char *msg);
 void reset(State8080 *cpu);
 
+// @TODO: an automated compliance test with steps progressed in the program
+// counter would be welcome.
+
+// @TODO: test
+void test_STA_D8(State8080 *cpu)
+{
+}
+
+// @TODO: test
+void test_ANI(State8080 *cpu);
+
 void test_CALL(State8080 *cpu)
 {
 // CALL addr		(Call)
@@ -206,13 +217,6 @@ void test_INX_RP(State8080 *cpu)
 
 	pass("INX_RP passed\n");
 }
-
-// @TODO: an automated compliance test with steps progressed in the program
-// counter would be welcome.
-
-// @TODO: test
-void test_ANI(State8080 *cpu);
-
 
 void test_RRC(State8080 *cpu)
 {

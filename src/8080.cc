@@ -547,7 +547,8 @@ int Emulate8080Op(State8080 *state)
 
     if (state->debug) {
 		Debug(state);
-		getchar();
+		while(getchar() != '\n')
+			;
     }
 
     switch(*opcode)
