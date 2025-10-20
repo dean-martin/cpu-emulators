@@ -5,22 +5,93 @@
 #include "8080.cc"
 #include <time.h>
 
-global_variable State8080 GlobalCPU;
-global_variable u16 GlobalShiftRegister;
-global_variable u8 GlobalShiftOffset;
+// @TODO: "space-invaders.h" or "sdl_8080.h"
+#define SCREEN_WIDTH 290
+#define SCREEN_HEIGHT 360
 
-static SDL_Window *window = NULL;
-static SDL_Renderer *renderer = NULL;
+typedef struct {
+	State8080 cpu;
 
-u8 *VideoPixels = NULL;
-const int WindowWidth = 290;
-const int WindowHeight = 360;
+	u8 *video_pixels;
+
+	u16 shift_register;
+	u8 shift_offset;
+
+	SDL_Window *window;
+	SDL_Renderer *renderer;
+} App;
+
+App app;
 
 // @see: https://www.computerarcheology.com/Arcade/SpaceInvaders/Hardware.html#inputs
-static u8 ports[8+1] = {
+static u8 InputPorts[8+1] = {
+// Port 0
+//  bit 0 DIP4 (Seems to be self-test-request read at power up)
+//  bit 1 Always 1
+//  bit 2 Always 1
+//  bit 3 Always 1
+//  bit 4 Fire
+//  bit 5 Left
+//  bit 6 Right
+//  bit 7 ? tied to demux port 7 ?
 	0b00001110, // Port 0
+
+// Port 1
+//  bit 0 = CREDIT (1 if deposit)
+//  bit 1 = 2P start (1 if pressed)
+//  bit 2 = 1P start (1 if pressed)
+//  bit 3 = Always 1
+//  bit 4 = 1P shot (1 if pressed)
+//  bit 5 = 1P left (1 if pressed)
+//  bit 6 = 1P right (1 if pressed)
+//  bit 7 = Not connected
 	0b00001000, // Port 1
+
+// Port 2
+//  bit 0 = DIP3 00 = 3 ships  10 = 5 ships
+//  bit 1 = DIP5 01 = 4 ships  11 = 6 ships
+//  bit 2 = Tilt
+//  bit 3 = DIP6 0 = extra ship at 1500, 1 = extra ship at 1000
+//  bit 4 = P2 shot (1 if pressed)
+//  bit 5 = P2 left (1 if pressed)
+//  bit 6 = P2 right (1 if pressed)
+//  bit 7 = DIP7 Coin info displayed in demo screen 0=ON
 	0b10000000, // Port 2
+
+// Port 3
+//   bit 0-7 Shift register data
+	0x0,
+	// Outputs Ports? what.
+};
+
+static u8 OutputPorts[8+1] = {
+// Port 2:
+//  bit 0,1,2 Shift amount
+
+// Port 3: (discrete sounds)
+//  bit 0=UFO (repeats)        SX0 0.raw
+//  bit 1=Shot                 SX1 1.raw
+//  bit 2=Flash (player die)   SX2 2.raw
+//  bit 3=Invader die          SX3 3.raw
+//  bit 4=Extended play        SX4
+//  bit 5= AMP enable          SX5
+//  bit 6= NC (not wired)
+//  bit 7= NC (not wired)
+//  Port 4: (discrete sounds)
+//  bit 0-7 shift data (LSB on 1st write, MSB on 2nd)
+
+// Port 5:
+//  bit 0=Fleet movement 1     SX6 4.raw
+//  bit 1=Fleet movement 2     SX7 5.raw
+//  bit 2=Fleet movement 3     SX8 6.raw
+//  bit 3=Fleet movement 4     SX9 7.raw
+//  bit 4=UFO Hit              SX10 8.raw
+//  bit 5= NC (Cocktail mode control ... to flip screen)
+//  bit 6= NC (not wired)
+//  bit 7= NC (not wired)
+
+// Port 6:
+//  Watchdog ... read or write to reset
 };
 
 void RenderScreen();
@@ -29,25 +100,25 @@ void RenderScreen();
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
     /* Create the window */
-	if (!SDL_CreateWindowAndRenderer("Hello World", WindowWidth, WindowHeight, NULL, &window, &renderer)) {
+	if (!SDL_CreateWindowAndRenderer("Hello World", SCREEN_WIDTH, SCREEN_HEIGHT, NULL, &app.window, &app.renderer)) {
         SDL_Log("Couldn't create window and renderer: %s", SDL_GetError());
         return SDL_APP_FAILURE;
     }
 
-	if (!InitCPU(&GlobalCPU)) 
+	if (!InitCPU(&app.cpu)) 
 	{
 		SDL_Log("Failed to init CPU, not enough memory?");
 		exit(1);
 	}
-    if(LoadROMFile(&GlobalCPU, "rom/invaders") == 0)
+    if(LoadROMFile(&app.cpu, "rom/invaders") == 0)
     {
 		SDL_Log("Failed to load invaders rom file, make sure it's placed as ./rom/invaders");
         exit(1);
     }
 
 	// @TODO: review sizing later
-    VideoPixels = (u8 *) calloc(4, 256*224);
-    if (!VideoPixels)
+    app.video_pixels = (u8 *) calloc(4, 256*224);
+    if (!app.video_pixels)
     {
         printf("[ERROR] failed to alloc VideoPixels\n");
         exit(1);
@@ -69,16 +140,24 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 			if (e->key == SDLK_C) 
 			{
 				// @TODO: Pretend a Coin was inserted, start game!
+				// PrintBinary(InputPorts[1]);
+				InputPorts[1] |= 1; // deposit CREDIT
+				// PrintBinary(InputPorts[1]);
 				SDL_Log("Coin deposited!!");
-				ports[1] |= 0x1; // deposit CREDIT
-				// ports[1] = 0xFF;
 			}
 			if (e->key == SDLK_S) 
 			{
 				SDL_Log("Start please!!");
-				ports[1] |= 0b00000100;
+				InputPorts[1] |= 0b00000100;
 			}
 		}
+
+		if (e->key == SDLK_D)
+		{
+			app.cpu.DebugPrint = app.cpu.DebugPrint ? 0 : 1;
+			SDL_Log("debug print: %d", app.cpu.DebugPrint);
+		}
+
 		// key released
 		if (!e->down)
 		{
@@ -86,7 +165,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 			{
 				// @TODO: Pretend a Coin was inserted, start game!
 				SDL_Log("Coin bit cleared.");
-				ports[1] &= ~0x1; // deposit CREDIT
+				// InputPorts[1] &= ~0x1; // deposit CREDIT
 			}
 		}
     }
@@ -98,19 +177,18 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
 u8 MachineIN(State8080 *cpu, u8 port)
 {
-	SDL_Log("IN: Port: %d", port);
-	// This enables attract mode
-	if (port == 0)
-		return 1;
-	if (port == 1)
-		return ports[1];
+	// // This enables attract mode?
+	// if (port == 1)
+	// 	return 1;
+	// if (port == 2)
+	// 	return InputPorts[2];
 
 	if (port == 3)
 	{
-		return ((GlobalShiftRegister >> (8-GlobalShiftOffset)) & 0xFF);
+		return ((app.shift_register >> (8-app.shift_offset)) & 0xFF);
 	}
-	return 0;
-	// return ports[port];
+
+	return InputPorts[port];
 }
 
 void MachineOUT(State8080 *cpu, u8 port)
@@ -119,15 +197,14 @@ void MachineOUT(State8080 *cpu, u8 port)
 		SDL_Log("OUT: Port: %d", port);
 	if (port == 2)
 	{
-		GlobalShiftOffset = cpu->a & 0x7;
+		app.shift_offset = cpu->a & 0x7;
 	}
 	if (port == 4)
 	{
-		GlobalShiftRegister = (cpu->a << 8) | (GlobalShiftRegister >> 8);
+		app.shift_register = (cpu->a << 8) | (app.shift_register >> 8);
 	}
-	ports[port] = cpu->a;
+	OutputPorts[port] = cpu->a;
 }
-
 
 /* This function runs once per frame, and is the heart of the program. */
 SDL_AppResult SDL_AppIterate(void *appstate)
@@ -138,15 +215,15 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	local_persist bool AlternateInterrupt;
 	local_persist time_t PreviousNow;
 
-	if (GlobalCPU.interrupt_enabled && (Now - LastInterruptTime) > 1.0/60.0)
+	if (app.cpu.interrupt_enabled && (Now - LastInterruptTime) > 1.0/60.0)
 	{
 		if (AlternateInterrupt)
 		{
-			GenerateInterrupt(&GlobalCPU, 2); // Interrupt "0x10"
+			GenerateInterrupt(&app.cpu, 2); // Interrupt "0x10"
 		}
 		else
 		{
-			GenerateInterrupt(&GlobalCPU, 1); // Interrupt "0x8"
+			GenerateInterrupt(&app.cpu, 1); // Interrupt "0x8"
 		}
 		AlternateInterrupt = !AlternateInterrupt;
 		LastInterruptTime = time(NULL);
@@ -159,39 +236,44 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 		LastRenderTime = time(NULL);
 		// SDL_Log("rendered");
     }
-
-    // GlobalCPU.DebugPrint = 1;
 	
+	// @TODO: fix
 	double MillisecondDifference = (Now - PreviousNow)/1000;
 	int cycles_to_catch_up = 2 * MillisecondDifference;
+	cycles_to_catch_up+=10; //lol
 	int cycles = 0;
 	if (MillisecondDifference)
 		printf("md:%f\n",MillisecondDifference);
 
 	while(cycles_to_catch_up > cycles)
 	{
-		u8 *opcode = &GlobalCPU.memory[GlobalCPU.pc];
-		// @TODO: We're never getting to this IN stage, why?
-		// Probably a bug in the CPU emulation :/
+		u8 *opcode = &app.cpu.memory[app.cpu.pc];
 		if (*opcode == 0xDB) // IN
 		{
 			u8 port = opcode[1];
-			GlobalCPU.a = MachineIN(&GlobalCPU, port);
-			SDL_Log("IN happened: a: %d\n", GlobalCPU.a);
-			GlobalCPU.pc += 2;
+			app.cpu.a = MachineIN(&app.cpu, port);
+
+			char *bin = (char *)malloc(sizeof(char[9]));
+			ByteToBinary(app.cpu.a, bin);
+			SDL_Log("IN: port:%d bin: %s\n", port, bin);
+			free(bin);
+
+			app.cpu.pc += 2;
 			cycles += 3;
 		}
 		else if (*opcode == 0xD3) // OUT
 		{
 			u8 port = opcode[1];
-			MachineOUT(&GlobalCPU, port);
-			SDL_Log("OUT happened: a: %d\n", GlobalCPU.a);
-			GlobalCPU.pc += 2;
+			MachineOUT(&app.cpu, port);
+
+			SDL_Log("OUT happened: a: %d\n", app.cpu.a);
+
+			app.cpu.pc += 2;
 			cycles += 3;
 		}
 		else
 		{
-			cycles += Emulate8080Op(&GlobalCPU);
+			cycles += Emulate8080Op(&app.cpu);
 		}
 	}
 
@@ -205,17 +287,17 @@ void RenderScreen()
 	// @see: https://computerarcheology.com/Arcade/SpaceInvaders/Hardware.html
 	// NOTE: Video RAM is 2400-3FFF
 	// The screens pixels are on/off (1 bit each). 256*224/8 = 7168 (7K) bytes.
-	u8 *VideoRAM = GlobalCPU.memory + 0x2400;
+	u8 *VideoRAM = app.cpu.memory + 0x2400;
 
 	// @TODO: Don't write into separate buffer.
-	u8 *Pixel = (u8 *)VideoPixels;
+	u8 *Pixel = (u8 *)app.video_pixels;
 	for(int Y=0; Y < 224; ++Y)
 	{
 		for(int X=0; X < 256; (X+=8, ++VideoRAM))
 		{
-			if((VideoRAM - GlobalCPU.memory) > 0x3FFF)
+			if((VideoRAM - app.cpu.memory) > 0x3FFF)
 			{
-				printf("[ERROR] VideoRAM overflowed: 0x%x", (VideoRAM - GlobalCPU.memory));
+				printf("[ERROR] VideoRAM overflowed: 0x%x", (VideoRAM - app.cpu.memory));
 				exit(1);
 			}
 
@@ -238,26 +320,26 @@ void RenderScreen()
 	}
 
 	// Clear to black
-	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-	SDL_RenderClear(renderer);
+	SDL_SetRenderDrawColor(app.renderer, 0, 0, 0, 255);
+	SDL_RenderClear(app.renderer);
 
 	// render color green
-	SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+	SDL_SetRenderDrawColor(app.renderer, 0, 255, 0, 255);
 	int X2 = 0;
 	int Y2 = 0;
 	for(int X=256-1; X>=0; (--X, ++Y2, X2=0))
 	{
 		for(int Y=0; Y<224; (++Y, ++X2))
 		{
-			u8 *GamePixel = (u8 *)(VideoPixels + (X) + (Y*256));
+			u8 *GamePixel = (u8 *)(app.video_pixels + (X) + (Y*256));
 			if (*GamePixel)
 			{
-				SDL_RenderPoint(renderer, X2, Y2);
+				SDL_RenderPoint(app.renderer, X2, Y2);
 			}
 		}
 	}
 
-	SDL_RenderPresent(renderer);
+	SDL_RenderPresent(app.renderer);
 }
 
 /* This function runs once at shutdown. */

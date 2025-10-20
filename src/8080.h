@@ -65,7 +65,7 @@ typedef union {
 u16 Word16(u8 high, u8 low);
 u16 RegisterPair(State8080 *cpu, char pair);
 
-char *ByteToBinary(unsigned char num);
+char *ByteToBinary(unsigned char num, char *output);
 void PrintBinary(unsigned x);
 int ParseInt(char *str);
 
