@@ -1,6 +1,6 @@
 #include "8080.h"
 
-// @TODO: fix JMP and CALL, ugly and broken
+// @TODO: fix JMP, ugly and broken
 
 static bool GlobalRunning;
 
@@ -282,7 +282,8 @@ JMP(State8080 *state)
     u8 *opcode = &state->memory[state->pc];
     state->pc = (opcode[2] << 8) | opcode[1];
     // @TODO: adjust
-    state->pc--;
+	// @TODO: holy test this hot garbage
+    // state->pc--;
 }
 
 inline void
@@ -794,7 +795,7 @@ int Emulate8080Op(State8080 *state)
 	    if (state->cc.z)
 			_RET(state);
 	} break;
-	case 0xC9: _RET(state); break; // _RET
+	case 0xC9: _RET(state); break; // RET
 	case 0xCA: // JZ addr
 	{
 	    if (state->cc.z)

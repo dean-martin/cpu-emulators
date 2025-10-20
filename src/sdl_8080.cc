@@ -178,10 +178,8 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 u8 MachineIN(State8080 *cpu, u8 port)
 {
 	// // This enables attract mode?
-	// if (port == 1)
-	// 	return 1;
-	// if (port == 2)
-	// 	return InputPorts[2];
+	if (port == 0)
+		return 1;
 
 	if (port == 3)
 	{
@@ -195,15 +193,19 @@ void MachineOUT(State8080 *cpu, u8 port)
 {
 	if (port != 6) // Watch dog is noisy.
 		SDL_Log("OUT: Port: %d", port);
+
 	if (port == 2)
 	{
 		app.shift_offset = cpu->a & 0x7;
+		return;
 	}
 	if (port == 4)
 	{
 		app.shift_register = (cpu->a << 8) | (app.shift_register >> 8);
+		return;
 	}
-	OutputPorts[port] = cpu->a;
+	// @TODO: revise
+	// OutputPorts[port] = cpu->a;
 }
 
 /* This function runs once per frame, and is the heart of the program. */

@@ -127,6 +127,7 @@ void test_LXI_RP(State8080 *cpu)
 	cpu->memory[1] = 0x34; // low-order data (byte 2)
 	cpu->memory[2] = 0x12; // high-order data (byte 3)
 	Emulate8080Op(cpu);
+	PrintBinary(cpu->b);
 	assert(cpu->b == 0x12);
 	assert(cpu->c == 0x34);
 
@@ -207,6 +208,7 @@ void test_INX_RP(State8080 *cpu)
 	pass("INX_RP passed\n");
 }
 
+// @TODO: test
 void test_JNZ(State8080 *cpu)
 {
 // Jcondition addr	(Conditional jump)
