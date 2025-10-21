@@ -307,8 +307,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
 u8 MachineIN(State8080 *cpu, u8 port)
 {
-	if (port == 3)
-	{
+	if (port == 3) {
 		return ((app.shift_register >> (8-app.shift_offset)) & 0xFF);
 	}
 
@@ -320,13 +319,11 @@ void MachineOUT(State8080 *cpu, u8 port)
 	// if (port != 6) // Watch dog is noisy.
 	// 	SDL_Log("OUT: Port: %d", port);
 
-	if (port == 2)
-	{
+	if (port == 2) {
 		app.shift_offset = cpu->a & 0x7;
 		return;
 	}
-	if (port == 4)
-	{
+	if (port == 4) {
 		app.shift_register = (cpu->a << 8) | (app.shift_register >> 8);
 		return;
 	}
@@ -343,7 +340,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	local_persist clock_t PreviousNow;
 
 	// hmmm wallclock is definitely better here. time(NUlL) calls were too expensive.
-	if (app.cpu.interrupt_enabled && (Now - LastInterruptTime) > 6000) {
+	if (app.cpu.interrupt_enabled && (Now - LastInterruptTime) > 9000) {
 		if (AlternateInterrupt) {
 			GenerateInterrupt(&app.cpu, 2); // Interrupt "0x10"
 			// SDL_Log("Interrupt 0x10");
@@ -355,13 +352,6 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 		AlternateInterrupt = !AlternateInterrupt;
 		LastInterruptTime = clock();
 	}
-
-
-	if((Now - LastRenderTime) > 6000) {
-		RenderScreen();
-		LastRenderTime = clock();
-		// SDL_Log("rendered");
-    }
 	
 	// @TODO: fix
 	double MillisecondDifference = Now - PreviousNow;
@@ -402,13 +392,18 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			app.cpu.pc += 2;
 			cycles += 3;
 		}
-		else
-		{
+		else {
 			cycles += Emulate8080Op(&app.cpu);
 		}
 	}
 
 	PreviousNow = Now;
+
+	if((Now - LastRenderTime) > 9000) {
+		RenderScreen();
+		LastRenderTime = clock();
+		// SDL_Log("rendered");
+    }
 
     return SDL_APP_CONTINUE;
 }
@@ -416,7 +411,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 void RenderScreen()
 {
 	// @see: https://computerarcheology.com/Arcade/SpaceInvaders/Hardware.html
-	// NOTE: Video RAM is 2400-3FFF
+	// @note: Video RAM is 2400-3FFF
 	// The screens pixels are on/off (1 bit each). 256*224/8 = 7168 (7K) bytes.
 	u8 *VideoRAM = app.cpu.memory + 0x2400;
 
@@ -454,7 +449,6 @@ void RenderScreen()
 	SDL_SetRenderDrawColor(app.renderer, 0, 0, 0, 255);
 	SDL_RenderClear(app.renderer);
 
-	// render color green
 	SDL_SetRenderDrawColor(app.renderer, 0, 255, 0, 255);
 	int X2 = 0;
 	int Y2 = 0;
