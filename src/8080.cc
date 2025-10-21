@@ -34,63 +34,6 @@ bool InitCPU(State8080 *CPU)
     return CPU->memory != NULL;
 }
 
-void GenerateInterrupt(State8080 *cpu, int interrupt_num)
-{
-	PUSH_PC(cpu);
-	cpu->pc = 8 * interrupt_num;
-	// simulate DI
-	cpu->interrupt_enabled = 0;
-}
-
-// @TODO: this should be a function on the struct.
-// Might as well embrace C++
-u16 RegisterPair(State8080 *cpu, char pair)
-{
-	if (pair == 'b')
-		return Word16(cpu->b, cpu->c);
-	if (pair == 'd')
-		return Word16(cpu->d, cpu->e);
-	if (pair == 'h')
-		return Word16(cpu->h, cpu->l);
-	// @TODO: panic!
-	return -1;
-}
-
-u16 Word16(u8 high, u8 low)
-{
-	bytes b;
-	b.high = high;
-	b.low = low;
-	return b.data;
-}
-
-// Pointer to ((H) (L))
-// H&L pair is considered "memory" in the data book.
-u8 *MemoryLocation(State8080 *state)
-{
-    return &state->memory[Word16(state->h, state->l)];
-}
-
-
-// @TODO: account for CPU Diagnostic runs
-void WriteMemory(State8080 *state, u16 Address, u8 Value)
-{
-	// if (Address < 0x2000) 
-	// {
-	// 	fprintf(stderr, "Writing to ROM memory not allowed %x\n", Address);
-	// 	exit(1);
-	// 	return;
-	// }
-	// if (Address >= 0x4000) 
-	// {
-	// 	fprintf(stderr, "Writing out to Space Invaders RAM not allowed %x\n", Address);
-	// 	exit(1);
-	// 	return;
-	// }
-	state->memory[Address] = Value;
-}
-
-
 int LoadROMFile(State8080 *state, const char *FileName)
 {
     // FileName = "W:\\chip-8\\rom\\invaders";
@@ -108,6 +51,62 @@ int LoadROMFile(State8080 *state, const char *FileName)
     fclose(fp);
 
     return 1;
+}
+
+inline void GenerateInterrupt(State8080 *cpu, int interrupt_num)
+{
+	PUSH_PC(cpu);
+	cpu->pc = 8 * interrupt_num;
+	// simulate DI
+	cpu->interrupt_enabled = 0;
+}
+
+// @TODO: this should be a function on the struct.
+// Might as well embrace C++
+inline u16 RegisterPair(State8080 *cpu, char pair)
+{
+	if (pair == 'b')
+		return Word16(cpu->b, cpu->c);
+	if (pair == 'd')
+		return Word16(cpu->d, cpu->e);
+	if (pair == 'h')
+		return Word16(cpu->h, cpu->l);
+	// @TODO: panic!
+	return -1;
+}
+
+inline u16 Word16(u8 high, u8 low)
+{
+	bytes b;
+	b.high = high;
+	b.low = low;
+	return b.data;
+}
+
+// Pointer to ((H) (L))
+// H&L pair is considered "memory" in the data book.
+inline u8 *MemoryLocation(State8080 *state)
+{
+    return &state->memory[Word16(state->h, state->l)];
+}
+
+
+// @TODO: account for CPU Diagnostic runs
+inline void WriteMemory(State8080 *state, u16 Address, u8 Value)
+{
+	// if (Address < 0x2000) 
+	// {
+	// 	fprintf(stderr, "Writing to ROM memory not allowed %x\n", Address);
+	// 	exit(1);
+	// 	return;
+	// }
+	// if (Address >= 0x4000) 
+	// {
+	// 	fprintf(stderr, "Writing out to Space Invaders RAM not allowed %x\n", Address);
+	// 	exit(1);
+	// 	return;
+	// }
+	state->memory[Address] = Value;
 }
 
 inline void
@@ -547,8 +546,13 @@ int Emulate8080Op(State8080 *state)
 
     if (state->debug) {
 		Debug(state);
-		while(getchar() != '\n')
-			;
+		char c;
+		while((c = getchar()) != '\n') {
+			if (c == 'q')
+				exit(0);
+			if (c == 'd')
+				state->debug = 0;
+		}
     }
 
     switch(*opcode)
@@ -687,6 +691,7 @@ int Emulate8080Op(State8080 *state)
 	case 0x66: state->h = *MemoryLocation(state); break;	// MOV H,M
 	case 0x67: state->h = state->a; break;	// MOV H,A
 	case 0x68: state->l = state->b; break;	// MOV L,B
+	case 0x69: state->l = state->c; break;	// MOV L,C
 	case 0x6b: state->l = state->e; break;	// MOV L,E
 	case 0x6c: state->l = state->h; break;	// MOV L,H
 	case 0x6F: state->l = state->a; break;	// MOV L,A

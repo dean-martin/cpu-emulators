@@ -1,9 +1,11 @@
 #define SDL_MAIN_USE_CALLBACKS 1  /* use the callbacks instead of main() */
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
-// @TODO: replace with header
-#include "8080.cc"
+#include "8080.h"
 #include <time.h>
+
+// good reference: https://www.youtube.com/watch?v=uGjgxwiemms
+// timing is way too slow
 
 // @TODO: "space-invaders.h" or "sdl_8080.h"
 #define SCREEN_WIDTH 290
@@ -112,7 +114,7 @@ static u8 InputPorts[8+1] = {
 //  bit 5 Left
 //  bit 6 Right
 //  bit 7 ? tied to demux port 7 ?
-	0b00000001, // Port 0
+	0b00001111, // Port 0
 
 
 // Port 1
@@ -124,7 +126,7 @@ static u8 InputPorts[8+1] = {
 //  bit 5 = 1P left (1 if pressed)
 //  bit 6 = 1P right (1 if pressed)
 //  bit 7 = Not connected
-	0b00001001, // Port 1
+	0b00001000, // Port 1
 
 // Port 2
 //  bit 0 = DIP3 00 = 3 ships  10 = 5 ships
@@ -227,7 +229,20 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 			if (e.key == SDLK_S) 
 			{
 				SDL_Log("Start please!!");
-				InputPorts[1] |= 0b00000100;
+				InputPorts[1] |= 0b00000110;
+			}
+			// player 1
+			if (e.key == SDLK_LEFT) {
+				SDL_Log("left!!");
+				InputPorts[1] |= 0b00100000;
+			}
+			if (e.key == SDLK_RIGHT) {
+				SDL_Log("right!!");
+				InputPorts[1] |= 0b01000000;
+			}
+			if (e.key == SDLK_UP || e.key == SDLK_SPACE) {
+				SDL_Log("SLDKUP OR SPACE!!");
+				InputPorts[1] |= 0b00010000;
 			}
 		}
 
@@ -256,10 +271,6 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
 u8 MachineIN(State8080 *cpu, u8 port)
 {
-	// // This enables attract mode?
-	// if (port == 0)
-	// 	return 1;
-
 	if (port == 3)
 	{
 		return ((app.shift_register >> (8-app.shift_offset)) & 0xFF);
@@ -270,8 +281,8 @@ u8 MachineIN(State8080 *cpu, u8 port)
 
 void MachineOUT(State8080 *cpu, u8 port)
 {
-	if (port != 6) // Watch dog is noisy.
-		SDL_Log("OUT: Port: %d", port);
+	// if (port != 6) // Watch dog is noisy.
+	// 	SDL_Log("OUT: Port: %d", port);
 
 	if (port == 2)
 	{
@@ -283,79 +294,82 @@ void MachineOUT(State8080 *cpu, u8 port)
 		app.shift_register = (cpu->a << 8) | (app.shift_register >> 8);
 		return;
 	}
-	// @TODO: revise
-	// OutputPorts[port] = cpu->a;
+	OutputPorts[port] = cpu->a;
 }
 
 /* This function runs once per frame, and is the heart of the program. */
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
-	time_t Now = time(NULL);
-	local_persist time_t LastInterruptTime;
-	local_persist time_t LastRenderTime;
+	register clock_t Now = clock();
+	local_persist clock_t LastInterruptTime;
+	local_persist clock_t LastRenderTime;
 	local_persist bool AlternateInterrupt;
-	local_persist time_t PreviousNow;
+	local_persist clock_t PreviousNow;
 
-	if (app.cpu.interrupt_enabled && (Now - LastInterruptTime) > 1.0/60.0)
-	{
-		if (AlternateInterrupt)
-		{
+	// hmmm wallclock is definitely better here. time(NUlL) calls were too expensive.
+	if (app.cpu.interrupt_enabled && (Now - LastInterruptTime) > 6000) {
+		if (AlternateInterrupt) {
 			GenerateInterrupt(&app.cpu, 2); // Interrupt "0x10"
+			// SDL_Log("Interrupt 0x10");
 		}
-		else
-		{
+		else {
 			GenerateInterrupt(&app.cpu, 1); // Interrupt "0x8"
+			// SDL_Log("Interrupt 0x08");
 		}
 		AlternateInterrupt = !AlternateInterrupt;
-		LastInterruptTime = time(NULL);
-		SDL_Log("interrupted");
+		LastInterruptTime = clock();
 	}
 
-	if((Now - LastRenderTime) > 1.0/60.0)
-    {
+
+	if((Now - LastRenderTime) > 6000) {
 		RenderScreen();
-		LastRenderTime = time(NULL);
+		LastRenderTime = clock();
 		// SDL_Log("rendered");
     }
 	
 	// @TODO: fix
-	double MillisecondDifference = (Now - PreviousNow)/1000;
+	double MillisecondDifference = Now - PreviousNow;
 	int cycles_to_catch_up = 2 * MillisecondDifference;
-	cycles_to_catch_up+=1; //lol
 	int cycles = 0;
-	if (MillisecondDifference)
-		printf("md:%f\n",MillisecondDifference);
 
 	while(cycles_to_catch_up > cycles)
 	{
 		u8 *opcode = &app.cpu.memory[app.cpu.pc];
 		if (*opcode == 0xDB) // IN
 		{
-			Debug(&app.cpu);
+			if (app.cpu.debug)
+				Debug(&app.cpu);
 			u8 port = opcode[1];
 			app.cpu.a = MachineIN(&app.cpu, port);
 
-			char *bin = (char *)malloc(sizeof(char[9]));
-			ByteToBinary(app.cpu.a, bin);
-			SDL_Log("IN: port:%d bin: %s\n", port, bin);
-			free(bin);
+			if (app.cpu.debug) {
+				char *bin = (char *)malloc(sizeof(char[9]));
+				ByteToBinary(app.cpu.a, bin);
+				SDL_Log("IN: port:%d bin: %s\n", port, bin);
+				free(bin);
+			}
 
 			app.cpu.pc += 2;
 			cycles += 3;
 
 			// @TODO: clear input bits on ports
 			// Clear all input bits, except bit 3 which is always 1 for some reason.
-			if (port == 1)
+			if (port == 1) {
+				InputPorts[0] &= 0b00001111;
 				InputPorts[1] &= 0b00001000;
+			}
 			// input 2 and 0 need to be cleared too
 		}
 		else if (*opcode == 0xD3) // OUT
 		{
-			Debug(&app.cpu);
+			if (app.cpu.debug)
+				Debug(&app.cpu);
 			u8 port = opcode[1];
 			MachineOUT(&app.cpu, port);
 
-			SDL_Log("OUT happened: a: %d\n", app.cpu.a);
+			// This is really noisy because it's using the emulated shift
+			// hardware.
+			// SDL_Log("OUT happened: a: %d\n", app.cpu.a);
 
 			app.cpu.pc += 2;
 			cycles += 3;

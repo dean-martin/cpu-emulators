@@ -76,6 +76,7 @@ int Disassemble8080Op(unsigned char *buffer, int pc);
 int Emulate8080Op(State8080 *state);
 int LoadROMFile(State8080 *state, const char *FileName);
 
+inline void GenerateInterrupt(State8080 *cpu, int interrupt_num);
 void Debug(State8080 *cpu);
 
 inline void
