@@ -4,6 +4,9 @@
 #include "8080.h"
 #include <time.h>
 
+// @TODO: scaling up the screen. maybe there's a SDL stretch blit?
+// @TODO: sound
+
 // good reference: https://www.youtube.com/watch?v=uGjgxwiemms
 // timing is way too slow
 
@@ -218,54 +221,87 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 			return SDL_APP_SUCCESS;
 		if (e.down)
 		{
-			if (e.key == SDLK_C) 
-			{
-				// @TODO: Pretend a Coin was inserted, start game!
-				// PrintBinary(InputPorts[1]);
+			if (e.key == SDLK_C) {
 				InputPorts[1] |= 1; // deposit CREDIT
-				// PrintBinary(InputPorts[1]);
-				SDL_Log("Coin deposited!!");
 			}
-			if (e.key == SDLK_S) 
-			{
-				SDL_Log("Start please!!");
-				InputPorts[1] |= 0b00000110;
-			}
+
 			// player 1
+			if (e.key == SDLK_S) {
+				InputPorts[1] |= 0b00000100;
+			}
 			if (e.key == SDLK_LEFT) {
-				SDL_Log("left!!");
 				InputPorts[1] |= 0b00100000;
 			}
 			if (e.key == SDLK_RIGHT) {
-				SDL_Log("right!!");
 				InputPorts[1] |= 0b01000000;
 			}
 			if (e.key == SDLK_UP || e.key == SDLK_SPACE) {
-				SDL_Log("SLDKUP OR SPACE!!");
 				InputPorts[1] |= 0b00010000;
 			}
-		}
+
+			// player 2
+			// @TODO: pick a decent layout? or just use the same...
+			if (e.key == SDLK_E) {
+				InputPorts[1] |= 0b00000010;
+			}
+			if (e.key == SDLK_A) {
+				InputPorts[2] |= 0b00100000;
+			}
+			if (e.key == SDLK_D) {
+				InputPorts[2] |= 0b01000000;
+			}
+			if (e.key == SDLK_W) {
+				InputPorts[2] |= 0b00010000;
+			}
+		} 
 
 		if (e.key == SDLK_D)
 		{
-			app.cpu.debug = app.cpu.debug ? 0 : 1;
-			SDL_Log("debug print: %d", app.cpu.debug);
+			// app.cpu.debug = app.cpu.debug ? 0 : 1;
+			// SDL_Log("debug print: %d", app.cpu.debug);
 		}
 
-		// key released
-		if (!e.down)
-		{
-			if (e.key == SDLK_C) 
-			{
-				// @TODO: Pretend a Coin was inserted, start game!
-				SDL_Log("Coin bit cleared.");
-				// InputPorts[1] &= ~0x1; // deposit CREDIT
-			}
-		}
     }
+
+	if (event->type == SDL_EVENT_KEY_UP) {
+		SDL_KeyboardEvent e = event->key;
+		if (e.key == SDLK_C) {
+			InputPorts[1] &= ~1;
+		}
+
+		// player 1
+		if (e.key == SDLK_S) {
+			InputPorts[1] &= ~0b00000100;
+		}
+		if (e.key == SDLK_LEFT) {
+			InputPorts[1] &= ~0b00100000;
+		}
+		if (e.key == SDLK_RIGHT) {
+			InputPorts[1] &= ~0b01000000;
+		}
+		if (e.key == SDLK_UP || e.key == SDLK_SPACE) {
+			InputPorts[1] &= ~0b00010000;
+		}
+
+		// player 2
+		if (e.key == SDLK_S) {
+			InputPorts[1] &= ~0b00000010;
+		}
+		if (e.key == SDLK_A) {
+			InputPorts[2] &= ~0b00100000;
+		}
+		if (e.key == SDLK_D) {
+			InputPorts[2] &= ~0b01000000;
+		}
+		if (e.key == SDLK_W) {
+			InputPorts[2] &= ~0b00010000;
+		}
+	}
+
     if (event->type == SDL_EVENT_QUIT) {
         return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
     }
+
     return SDL_APP_CONTINUE;
 }
 
@@ -351,14 +387,6 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
 			app.cpu.pc += 2;
 			cycles += 3;
-
-			// @TODO: clear input bits on ports
-			// Clear all input bits, except bit 3 which is always 1 for some reason.
-			if (port == 1) {
-				InputPorts[0] &= 0b00001111;
-				InputPorts[1] &= 0b00001000;
-			}
-			// input 2 and 0 need to be cleared too
 		}
 		else if (*opcode == 0xD3) // OUT
 		{
