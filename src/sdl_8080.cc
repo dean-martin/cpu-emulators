@@ -6,9 +6,14 @@
 
 // @TODO: scaling up the screen. maybe there's a SDL stretch blit?
 // @TODO: sound
+// @TODO: disassembler is inconsistant with literal hex, address hex, and memory hex
+// i.e., #01, $006c, ($006c)
+// @TODO: AppQuit cleanup
 
-// good reference: https://www.youtube.com/watch?v=uGjgxwiemms
-// timing is way too slow
+// An advanced debugging framework would be amazing here, saving and reloading state,
+// and a UI to inspect memory, naming functions at addresses, etc.
+
+// video reference (for speed, colors): https://www.youtube.com/watch?v=uGjgxwiemms
 
 // @TODO: "space-invaders.h" or "sdl_8080.h"
 #define SCREEN_WIDTH 290
@@ -27,84 +32,6 @@ typedef struct {
 } App;
 
 App app;
-
-// @TODO: disassembler is inconsistant with literal hex, address hex, and memory hex
-// i.e., #01, $006c, ($006c)
-// review.
-
-// An advanced debugging framework would be amazing here, saving and reloading state,
-// and a UI to inspect memory and what not. Naming functions at addresses, etc.
-// A real debugger for 8080 cpu emulation.
-
-// PC at 0x0020 is IN#0x01
-// RRC checks start at 0x0022
-// Port 1 is 0b00001111
-// JC $0067
-// MVI A, #$01
-// STA ($20ea) (this is what gets checked later on?)
-// 0x006c JMP $003f
-// 0x003f STA($20ea) (why are we storing this twice? what)
-// 0x0042 LDA $20e9
-// ANA A -- C=1
-// 0x0046 JZ #$0082
-// 0x0049 LDA $20ef
-// ANA A
-// JNZ $006f
-// 0x0050 LDA $20eb
-//
-// This routine loads a byte into memory, then RRC offs to check the first 3 bits.
-// Where is the $20ca write then?
-// CALL $0abf -- This starts a common routine?
-// LDA $20ca
-// RRC
-// JC $0abb
-// RRC
-// JC $1868
-// RRC
-// JC $0aab
-// RET
-// 0x005a JMP $0082 -- restarting the loop?
-// yup, popping registers into the stack to then Enable Input (EI)
-// 0x000c JMP $008c -- this does some XRA A and wierdness, to clear the CY bit?
-// XRA A
-// STA ($2072)
-// 0x0090 LDA $20e9
-// ANA A
-// JZ #$0082
-// 0x0097(cont) LDA $20ef
-// ANA A
-// 0x009b JNZ $00a5
-// 0x009e LDA $20c1
-// RRC
-// JNC #$0082
-// POP H
-// POP D
-// POP B
-// POP PSW
-// EI
-// ...
-// -- this is the TILT check, neat. does early return if fine.
-// 0x001d CALL $17cd
-// 0x17cd IN #0x02 (port "2")
-// ANI #$04
-// RZ (Z=1)
-// 0x0020 IN #0x01 (port "1") (00001111) I think this was input?
-// 0x0022 RRC
-// 0x0023 JC $0067 
-// 0x0067 MVI A, #$01
-// 0x0069 STA ($20ea)
-// 0x006c JMP $003f
-// 0x003f STA ($20ea)
-
-// don't understand, it's checking $20xx area, (considered RAM in SpaceInvaders iirc)
-// but storing input in places it doesn't check later on? Is there a bug in the emulation?
-// Storing to: $2072, $20ea
-// Loading from: $20e9, $20ef,$20ca, $20c1
-
-// I might have it stuck in a early boot loop with an input flag that's suppose
-// to clear later on. Yeah, I shifted up the ports (n+1 = n), and that was definitely wrong.
-// Port[2] is definitely the TILT check using 0x04
-// okay, retrying with what I think are "
 
 // @see: https://www.computerarcheology.com/Arcade/SpaceInvaders/Hardware.html#inputs
 static u8 InputPorts[8+1] = {
@@ -184,7 +111,7 @@ void RenderScreen();
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
     /* Create the window */
-	if (!SDL_CreateWindowAndRenderer("Hello World", SCREEN_WIDTH, SCREEN_HEIGHT, NULL, &app.window, &app.renderer)) {
+	if (!SDL_CreateWindowAndRenderer("Space Invaders (1978)", SCREEN_WIDTH, SCREEN_HEIGHT, NULL, &app.window, &app.renderer)) {
         SDL_Log("Couldn't create window and renderer: %s", SDL_GetError());
         return SDL_APP_FAILURE;
     }
@@ -396,13 +323,12 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 		}
 	}
 
-	PreviousNow = Now;
-
 	if((Now - LastRenderTime) > 9000) {
 		RenderScreen();
 		LastRenderTime = clock();
-		// SDL_Log("rendered");
     }
+
+	PreviousNow = Now;
 
     return SDL_APP_CONTINUE;
 }
