@@ -433,14 +433,6 @@ void RenderScreen()
 				else
 					*Pixel++ = 0;
 			}
-
-#if 0
-			if (*VideoRAM != 0)
-			{
-				printf("0x%x ", *VideoRAM);
-				PrintBinary(*VideoRAM);
-			}
-#endif
 		}
 	}
 

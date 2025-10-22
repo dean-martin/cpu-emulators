@@ -2,12 +2,11 @@
 
 ![attractdemo](/screens/attractscreen.png)
 
-Very much WIP. But now in playable state. The initial Intel 8080 CPU is done.
+A work in progress, but in a playable state. The initial Intel 8080 CPU is done.
 Writing a simple test suite helped find a ton of bugs. Hardware emulation is
 still in progress. Timing and refresh rate is off.
 
 I'm using SDL3 as a vendored git submodule.
-
 
 ## Building
 - cmake
@@ -18,6 +17,7 @@ I'm using SDL3 as a vendored git submodule.
 ```
 
 TODOs:
+- [X] Colors.
 - [ ] Fix Timing, Refresh Rate.
 - [ ] Scale scale OR stretch blitting. (Current window is very small)
 - [ ] Sound Emulation

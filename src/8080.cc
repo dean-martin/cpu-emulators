@@ -1,6 +1,6 @@
 #include "8080.h"
 
-// @TODO: revise program counter advancement, it's kinda whack.
+// @TODO: revise program counter advancement.
 
 unsigned char cycles8080[] = {
 	4, 10, 7, 5, 5, 5, 7, 4, 4, 10, 7, 5, 5, 5, 7, 4, //0x00..0x0f
@@ -33,7 +33,6 @@ bool InitCPU(State8080 *CPU)
 
 int LoadROMFile(State8080 *state, const char *FileName)
 {
-    // FileName = "W:\\chip-8\\rom\\invaders";
     FILE *fp = fopen(FileName, "rb");
     if (fp == NULL) {
 		fprintf(stderr, "failed to open file `%s`\n%s\n", FileName, strerror(errno));
@@ -1033,15 +1032,6 @@ char *ByteToBinary(unsigned char num, char *output)
     output[8] = '\0';
 
     return output;
-}
-
-void PrintBinary(unsigned x)
-{
-	char str[9];
-	if (!ByteToBinary(x, str)) {
-		return;
-	}
-    printf("%s\n", str);
 }
 
 int Disassemble8080Op(unsigned char *codebuffer, int pc)

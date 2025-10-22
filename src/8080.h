@@ -75,7 +75,6 @@ static inline void PUSH_PC(State8080 *state);
 void DebugPrint(State8080 *cpu);
 
 char *ByteToBinary(unsigned char num, char *output);
-void PrintBinary(unsigned x);
 int ParseInt(char *str);
 
 // why did i start this
