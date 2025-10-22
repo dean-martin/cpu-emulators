@@ -121,6 +121,8 @@ void test_SHLD(State8080 *cpu)
 
 	assert(cpu->memory[0x1234] == 0x11);
 	assert(cpu->memory[0x1235] == 0x22);
+
+	passed("SHLD passed\n");
 }
 
 void test_LXI_RP(State8080 *cpu)

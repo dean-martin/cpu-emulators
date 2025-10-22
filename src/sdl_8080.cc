@@ -369,10 +369,9 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			app.cpu.a = MachineIN(&app.cpu, port);
 
 			if (app.cpu.debug) {
-				char *bin = (char *)malloc(sizeof(char[9]));
+				char bin[9];
 				ByteToBinary(app.cpu.a, bin);
 				SDL_Log("IN: port:%d bin: %s\n", port, bin);
-				free(bin);
 			}
 
 			app.cpu.pc += 2;
@@ -449,11 +448,23 @@ void RenderScreen()
 	SDL_SetRenderDrawColor(app.renderer, 0, 0, 0, 255);
 	SDL_RenderClear(app.renderer);
 
-	SDL_SetRenderDrawColor(app.renderer, 0, 255, 0, 255);
 	int X2 = 0;
 	int Y2 = 0;
 	for(int X=256-1; X>=0; (--X, ++Y2, X2=0))
 	{
+		// arcade machines would have colored tape on the screens
+		// invaders + scores
+		if (X >= 80) {
+			SDL_SetRenderDrawColor(app.renderer, 255, 255, 255, 255);
+		}
+		// tank + cover
+		if (X < 80) {
+			SDL_SetRenderDrawColor(app.renderer, 0, 255, 0, 255);
+		}
+		// red ship
+		if (X > 200 && X < 220) {
+			SDL_SetRenderDrawColor(app.renderer, 255, 0, 0, 255);
+		}
 		for(int Y=0; Y<224; (++Y, ++X2))
 		{
 			u8 *GamePixel = (u8 *)(app.video_pixels + (X) + (Y*256));

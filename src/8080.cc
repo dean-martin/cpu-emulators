@@ -1029,11 +1029,6 @@ int ParseInt(char *str)
 
 char *ByteToBinary(unsigned char num, char *output)
 {
-	if (sizeof(output) >= 9) {
-		fprintf(stderr, "error in [char *ByteToBinary]: output char * not large enough for a byte. size: %d\n", sizeof(output));
-		return NULL;
-	}
-
     for (int i = 7; i >= 0; i--) {
 		output[i] = (num & 01) ? '1' : '0';
 		num >>= 1;
@@ -1045,12 +1040,11 @@ char *ByteToBinary(unsigned char num, char *output)
 
 void PrintBinary(unsigned x)
 {
-    char *str = (char *) malloc(sizeof(char[8+1]));
+	char str[9];
 	if (!ByteToBinary(x, str)) {
 		return;
 	}
     printf("%s\n", str);
-    free(str);
 }
 
 int Disassemble8080Op(unsigned char *codebuffer, int pc)
@@ -1059,7 +1053,8 @@ int Disassemble8080Op(unsigned char *codebuffer, int pc)
     int opbytes = 1;
     printf("PC: 0x%04x ", pc);
     //printf("0x%02x ", *code);
-    char *codebin = (char *)malloc(sizeof(char[9]));
+	//cha
+	char codebin[9];
 	ByteToBinary(*code, codebin);
     //printf("%sb ", codebin);
     switch (*code)
@@ -1301,11 +1296,7 @@ int Disassemble8080Op(unsigned char *codebuffer, int pc)
 	default: printf("__TODO__ Opcode: 0x%02x %sb", *code, codebin);  break;
     }
 
-
     printf("\n");
-
-    free(codebin);
-    codebin = NULL;
 
     return opbytes;
 }

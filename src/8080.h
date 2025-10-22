@@ -11,8 +11,6 @@
 #define inline  
 #endif
 
-// @TODO: clean up, make 8080.cc a proper include?
-
 typedef struct ConditionCodes {
 	u8 z:1;
 	u8 s:1;
@@ -51,6 +49,7 @@ typedef struct State8080 {
 } State8080;
 #pragma pack(pop)
 
+// bit shifting is fine, i just wanted to play with unions.
 typedef union {
     // so we read in Big Endianness, but Little Endian looks like this, ok ok.
     struct {

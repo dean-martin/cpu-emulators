@@ -11,12 +11,12 @@ void push(int16 Byte)
 
 int16 pop()
 {
-    if(Stack == StackStart)
-    {
-	return(*Stack);
-    }
+	if(Stack == StackStart)
+	{
+		return(*Stack);
+	}
 
-    return(*--Stack);
+	return(*--Stack);
 }
 
 int main()
