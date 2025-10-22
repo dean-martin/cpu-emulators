@@ -49,9 +49,7 @@ typedef struct State8080 {
 } State8080;
 #pragma pack(pop)
 
-// bit shifting is fine, i just wanted to play with unions.
 typedef union {
-    // so we read in Big Endianness, but Little Endian looks like this, ok ok.
     struct {
 		u8 low;
 		u8 high;
@@ -59,27 +57,26 @@ typedef union {
     u16 data;
 } bytes; // @TODO: better name
 
-// rp:
+// rp (register pair):
 // B represents the B,C pair with B as the high-order register and C as the
 // low-order register;
-u16 Word16(u8 high, u8 low);
-u16 RegisterPair(State8080 *cpu, char pair);
+static u16 Word16(u8 high, u8 low);
+static u16 RegisterPair(State8080 *cpu, char pair);
+
+bool InitCPU(State8080 *CPU);
+int LoadROMFile(State8080 *state, const char *FileName);
+
+int Emulate8080Op(State8080 *state);
+int Disassemble8080Op(unsigned char *buffer, int pc);
+
+void GenerateInterrupt(State8080 *cpu, int interrupt_num);
+static inline void PUSH_PC(State8080 *state);
+
+void DebugPrint(State8080 *cpu);
 
 char *ByteToBinary(unsigned char num, char *output);
 void PrintBinary(unsigned x);
 int ParseInt(char *str);
-
-bool InitCPU(State8080 *CPU);
-
-int Disassemble8080Op(unsigned char *buffer, int pc);
-int Emulate8080Op(State8080 *state);
-int LoadROMFile(State8080 *state, const char *FileName);
-
-inline void GenerateInterrupt(State8080 *cpu, int interrupt_num);
-void Debug(State8080 *cpu);
-
-inline void
-PUSH_PC(State8080 *state);
 
 // why did i start this
 // @TODO: a lookup table would be great

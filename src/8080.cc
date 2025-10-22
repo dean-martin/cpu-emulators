@@ -2,9 +2,6 @@
 
 // @TODO: revise program counter advancement, it's kinda whack.
 
-static bool GlobalRunning;
-
-// @TODO: don't be a copypaste dummy, do it urself bucko.
 unsigned char cycles8080[] = {
 	4, 10, 7, 5, 5, 5, 7, 4, 4, 10, 7, 5, 5, 5, 7, 4, //0x00..0x0f
 	4, 10, 7, 5, 5, 5, 7, 4, 4, 10, 7, 5, 5, 5, 7, 4, //0x10..0x1f
@@ -53,7 +50,7 @@ int LoadROMFile(State8080 *state, const char *FileName)
     return 1;
 }
 
-inline void GenerateInterrupt(State8080 *cpu, int interrupt_num)
+void GenerateInterrupt(State8080 *cpu, int interrupt_num)
 {
 	PUSH_PC(cpu);
 	cpu->pc = 8 * interrupt_num;
@@ -63,7 +60,7 @@ inline void GenerateInterrupt(State8080 *cpu, int interrupt_num)
 
 // @TODO: this should be a function on the struct.
 // Might as well embrace C++
-inline u16 RegisterPair(State8080 *cpu, char pair)
+static inline u16 RegisterPair(State8080 *cpu, char pair)
 {
 	if (pair == 'b')
 		return Word16(cpu->b, cpu->c);
@@ -75,7 +72,7 @@ inline u16 RegisterPair(State8080 *cpu, char pair)
 	return -1;
 }
 
-inline u16 Word16(u8 high, u8 low)
+static inline u16 Word16(u8 high, u8 low)
 {
 	bytes b;
 	b.high = high;
@@ -85,14 +82,14 @@ inline u16 Word16(u8 high, u8 low)
 
 // Pointer to ((H) (L))
 // H&L pair is considered "memory" in the data book.
-inline u8 *MemoryLocation(State8080 *state)
+static inline u8 *MemoryLocation(State8080 *state)
 {
     return &state->memory[Word16(state->h, state->l)];
 }
 
 
 // @TODO: account for CPU Diagnostic runs
-inline void WriteMemory(State8080 *state, u16 Address, u8 Value)
+static inline void WriteMemory(State8080 *state, u16 Address, u8 Value)
 {
 	// if (Address < 0x2000) 
 	// {
@@ -109,7 +106,7 @@ inline void WriteMemory(State8080 *state, u16 Address, u8 Value)
 	state->memory[Address] = Value;
 }
 
-inline void
+static inline void
 UnimplementedInstruction(State8080 *state)
 {
     fprintf(stderr, "Error: unimplemented instruction\nopcode: 0x%02x\naddr: 0x%02x\n",
@@ -117,13 +114,13 @@ UnimplementedInstruction(State8080 *state)
     exit(1);
 }
 
-inline u8
+static inline u8
 Parity(u8 ans)
 {
     return (ans%2) == 0;
 }
 
-inline void
+static inline void
 CMP(State8080 *state, u8 word)
 {
     u8 x = state->a - word;
@@ -133,7 +130,7 @@ CMP(State8080 *state, u8 word)
     state->cc.cy = (state->a < word);
 }
 
-inline void
+static inline void
 process_flags(State8080 *state, u16 answer)
 {
     state->cc.z = ((answer & 0xff) == 0);
@@ -143,7 +140,7 @@ process_flags(State8080 *state, u16 answer)
 }
 
 // process condition flags, no carry (NC)
-inline void
+static inline void
 process_flags_nc(State8080 *state, u16 answer)
 {
     state->cc.z = ((answer & 0xff) == 0);
@@ -151,7 +148,7 @@ process_flags_nc(State8080 *state, u16 answer)
     state->cc.p = Parity(answer&0xff);
 }
 
-inline void
+static inline void
 ADD(State8080 *state, u8 num)
 {
     u16 answer = (u16) state->a + (u16) num;
@@ -159,7 +156,7 @@ ADD(State8080 *state, u8 num)
     state->a = answer & 0xff;
 }
 
-inline void
+static inline void
 ADC(State8080 *state, u8 num)
 {
     u16 answer = (u16) state->a + (u16) num + (u16) state->cc.cy;
@@ -167,7 +164,7 @@ ADC(State8080 *state, u8 num)
     state->a = answer & 0xff;
 }
 
-inline void
+static inline void
 ACI(State8080 *state, u8 word)
 {
     u16 answer = (u16) state->a + (u16) word + (u16) state->cc.cy;
@@ -175,7 +172,7 @@ ACI(State8080 *state, u8 word)
     state->a = answer & 0xff;
 }
 
-inline void
+static inline void
 SUB(State8080 *state, u8 num)
 {
     u16 answer = (u16) state->a - (u16) num;
@@ -183,7 +180,7 @@ SUB(State8080 *state, u8 num)
     state->a = answer & 0xff;
 }
 
-inline void
+static inline void
 SBB(State8080 *state, u8 word)
 {
     u16 answer = (u16) state->a - (u16) word - (u16) state->cc.cy;
@@ -191,21 +188,21 @@ SBB(State8080 *state, u8 word)
     state->a = answer & 0xff;
 }
 
-inline void _INR_M(State8080 *state)
+static inline void _INR_M(State8080 *state)
 {
     u16 offset = (state->h<<8) | state->l;
     state->memory[offset] += 1;
     process_flags_nc(state, state->memory[offset]);
 }
 
-inline void _DCR_M(State8080 *state)
+static inline void _DCR_M(State8080 *state)
 {
     u16 offset = (state->h<<8) | state->l;
     state->memory[offset] -= 1;
     process_flags_nc(state, state->memory[offset]);
 }
 
-inline void INX_RP(u8 *rh, u8 *rl)
+static inline void INX_RP(u8 *rh, u8 *rl)
 {
     u16 pair = (*rh << 8) | *rl;
     pair++;
@@ -213,7 +210,7 @@ inline void INX_RP(u8 *rh, u8 *rl)
     *rh = (pair >> 8);
 }
 
-inline void DCX_RP(u8 *rh, u8 *rl)
+static inline void DCX_RP(u8 *rh, u8 *rl)
 {
     u16 pair = (*rh << 8) | *rl;
     pair--;
@@ -221,7 +218,7 @@ inline void DCX_RP(u8 *rh, u8 *rl)
     *rh = (pair >> 8) & 0xFF;
 }
 
-inline void DAD_RP(State8080 *state, u8 rh, u8 rl)
+static inline void DAD_RP(State8080 *state, u8 rh, u8 rl)
 {
     u32 hl = (state->h << 8) | state->l;
     u32 bc = (rh << 8) | rl;
@@ -231,7 +228,7 @@ inline void DAD_RP(State8080 *state, u8 rh, u8 rl)
     state->h = hl >> 8;
 }
 
-inline void _DAA(State8080 *state)
+static inline void _DAA(State8080 *state)
 {
 /*
 
@@ -251,18 +248,18 @@ inline void _DAA(State8080 *state)
     u8 nibble = (~0 >> 4);
     u8 lsb = (state->a & nibble);
     if (lsb > 9) {
-	state->a += 6;
+		state->a += 6;
     }
     u8 msb = ((state->a >> 4) & nibble);
     if (msb > 9 || state->cc.cy) {
-	msb += 6;
-	state->a = (msb << 8) | (state->a & 0xFF);
+		msb += 6;
+		state->a = (msb << 8) | (state->a & 0xFF);
     }
 
     process_flags(state, state->a);
 }
 
-inline void
+static inline void
 _CALL(State8080 *state)
 {
     u8 *opcode = &state->memory[state->pc];
@@ -275,7 +272,7 @@ _CALL(State8080 *state)
 	state->pc--;
 }
 
-inline void
+static inline void
 _JMP(State8080 *state)
 {
     u8 *opcode = &state->memory[state->pc];
@@ -285,7 +282,7 @@ _JMP(State8080 *state)
     state->pc--;
 }
 
-inline void
+static inline void
 _RET(State8080 *state)
 {
 	u16 ReturnAddress = Word16(state->memory[state->sp+1], state->memory[state->sp]);
@@ -295,7 +292,7 @@ _RET(State8080 *state)
 	state->pc--;
 }
 
-inline void
+static inline void
 RST(State8080 *state, u8 NNN)
 {
     u16 ret = state->pc+2;
@@ -305,7 +302,7 @@ RST(State8080 *state, u8 NNN)
     state->pc = 8 * NNN;
 }
 
-inline void
+static inline void
 ANA(State8080 *state, u8 r)
 {
     state->a = state->a & r;
@@ -313,7 +310,7 @@ ANA(State8080 *state, u8 r)
     state->cc.cy = 0;
 }
 
-inline void
+static inline void
 XRA(State8080 *state, u8 r)
 {
     state->a = state->a ^ r;
@@ -322,7 +319,7 @@ XRA(State8080 *state, u8 r)
     state->cc.ac = 0;
 }
 
-inline void
+static inline void
 XRI(State8080 *state)
 {
     u8 *word = &state->memory[state->pc+1];
@@ -332,7 +329,7 @@ XRI(State8080 *state)
     state->cc.ac = 0;
 }
 
-inline void
+static inline void
 ORA(State8080 *state, u8 r)
 {
     state->a = state->a | r;
@@ -341,14 +338,14 @@ ORA(State8080 *state, u8 r)
     state->cc.ac = 0;
 }
 
-inline void
+static inline void
 _RLC(State8080 *state)
 {
     state->cc.cy = ((state->a >> 7) & 1);
     state->a = (state->a << 1) | ((state->a >> 7) & 1);
 }
 
-inline void
+static inline void
 _RAL(State8080 *state)
 {
     u8 msb = (state->a >> 7) & 1;
@@ -356,7 +353,7 @@ _RAL(State8080 *state)
     state->cc.cy = msb;
 }
 
-inline void
+static inline void
 _RAR(State8080 *state)
 {
     u8 x = state->a;
@@ -364,7 +361,7 @@ _RAR(State8080 *state)
     state->cc.cy = ((x & 1) == 1);
 }
 
-inline void
+static inline void
 HLT(State8080 *state)
 {
     // HALT! IN THE NAME OF THE LAW!
@@ -372,21 +369,21 @@ HLT(State8080 *state)
     exit(0);
 }
 
-inline void
+static inline void
 IN(State8080 *state)
 {
     // @TODO: implement
     state->pc++;
 }
 
-inline void
+static inline void
 OUT(State8080 *state)
 {
     // @TODO: implement
     state->pc++;
 }
 
-inline void
+static inline void
 POP_B(State8080 *state)
 {
     state->c = state->memory[state->sp];
@@ -394,7 +391,7 @@ POP_B(State8080 *state)
     state->sp += 2;
 }
 
-inline void
+static inline void
 POP_D(State8080 *state)
 {
     state->e = state->memory[state->sp];
@@ -402,7 +399,7 @@ POP_D(State8080 *state)
     state->sp += 2;
 }
 
-inline void
+static inline void
 POP_H(State8080 *state)
 {
     state->l = state->memory[state->sp];
@@ -410,7 +407,7 @@ POP_H(State8080 *state)
     state->sp += 2;
 }
 
-inline void
+static inline void
 PUSH_B(State8080 *state)
 {
 	WriteMemory(state, state->sp-1, state->b);
@@ -418,7 +415,7 @@ PUSH_B(State8080 *state)
     state->sp -= 2;
 }
 
-inline void
+static inline void
 PUSH_D(State8080 *state)
 {
 	WriteMemory(state, state->sp-1, state->d);
@@ -426,7 +423,7 @@ PUSH_D(State8080 *state)
     state->sp -= 2;
 }
 
-inline void
+static inline void
 PUSH_H(State8080 *state)
 {
 	WriteMemory(state, state->sp-1, state->h);
@@ -434,7 +431,7 @@ PUSH_H(State8080 *state)
     state->sp -= 2;
 }
 
-inline void
+static inline void
 PUSH_PC(State8080 *state)
 {
 	WriteMemory(state, state->sp-1, (state->pc >> 8));
@@ -545,7 +542,7 @@ int Emulate8080Op(State8080 *state)
     u8 *opcode = &state->memory[state->pc];
 
     if (state->debug) {
-		Debug(state);
+		DebugPrint(state);
 		char c;
 		while((c = getchar()) != '\n') {
 			if (c == 'q')
@@ -1003,7 +1000,7 @@ int Emulate8080Op(State8080 *state)
     return cycles8080[*opcode];
 }
 
-void Debug(State8080 *cpu)
+void DebugPrint(State8080 *cpu)
 {
 	Disassemble8080Op(cpu->memory, cpu->pc);
 	printf("\tStep: %lld\n", cpu->Steps);
@@ -1052,11 +1049,8 @@ int Disassemble8080Op(unsigned char *codebuffer, int pc)
     unsigned char *code = &codebuffer[pc];
     int opbytes = 1;
     printf("PC: 0x%04x ", pc);
-    //printf("0x%02x ", *code);
-	//cha
 	char codebin[9];
 	ByteToBinary(*code, codebin);
-    //printf("%sb ", codebin);
     switch (*code)
     {
 	case 0x00: printf("NOP"); break;
@@ -1300,140 +1294,3 @@ int Disassemble8080Op(unsigned char *codebuffer, int pc)
 
     return opbytes;
 }
-
-#if 0
-void p(int a);
-// bonus points for figuring out multiplication using bit shifts. :O
-// doesn't work with numbers > 10, but 1-9 just fine.
-int binmul(int a, int b)
-{
-    int Max = max(a,b);
-    int Min = min(a,b);
-    int maxb = Max;
-    int minb = Min;
-    if (a == 1 || b == 1)
-		return Max;
-    while (Min > 0) {
-		// @TODO: handle wrapped bits for big numbers.
-		if ((Min >>= 1) > 0)
-			Max <<= 1;
-		if (Min == 3)
-			Max += maxb;
-    }
-    if (minb & 1)
-		Max += maxb;
-    return Max;
-}
-
-void p(int a)
-{
-    char *bin = ByteToBinary(a);
-    printf("%s:%d\n", bin, a);
-    free(bin);
-}
-
-void debug(int a, int b)
-{
-    p(a);
-    p(b);
-    p(a*b);
-    int res = binmul(a, b);
-    p(res);
-    if (a*b == res)
-	printf("PASS\n");
-    else {
-	printf("FAIL\n");
-	printf("AHHHHHHHH");
-	exit(1);
-    }
-}
-#endif
-
-#if 0
-int main(int argc, char **argv)
-{
-#if 0
-    for (int i = 1; i < 10; i++)
-	for (int j = 9; j > 0; j--)
-	    debug(i,j);
-    debug(25, 10);
-    return 0;
-#endif
-
-    fprintf(stderr, "test\n");
-
-	if (argc < 2) {
-		fprintf(stderr, "pass a rom file dummy");
-		exit(1);
-	}
-
-    int pc = 0;
-
-    int maxops = 10000;
-    if (argc > 2)
-	maxops = ParseInt(argv[2]);
-
-    State8080 *state = (State8080 *) calloc(1, sizeof(State8080));
-	if(LoadROMFile(state, "W:\\chip-8\\rom\\invaders") == 0)
-	{
-		// :(
-		exit(1);
-	}
-
-    GlobalRunning = true;
-
-    // Run at least one op to match up with 8080js
-    state->DebugPrint = 1;
-    Emulate8080Op(state);
-
-	char c = 0;
-#define MAX_CHAR 256
-	char CharBuffer[MAX_CHAR] = {};
-	int BufferIndex = 0;
-	while (GlobalRunning) {
-		while ((c = getchar()) != '\n') {
-			if (c == 'q')
-				goto end;
-			CharBuffer[BufferIndex++] = c;
-		}
-		printf("\b \b");
-		char *s = CharBuffer;
-		BufferIndex = 0;
-		int n = 0;
-		while (isdigit((c = *s++)))
-			n = (n * 10) + c-'0';
-		if (n <= 0)
-			n = 1;
-		// printf("advancing %d steps\n", n);
-		// getchar();
-		while (n-- > 0) {
-			if (n <= 100)
-				state->DebugPrint = 1;
-			else
-				state->DebugPrint = 0;
-			Emulate8080Op(state);
-		}
-		for (int i = 0; i < MAX_CHAR; i++)
-			CharBuffer[i] = 0;
-	}
-
-#if 0
-    while (pc < fsize && pc < maxops) {
-	int ops = Disassemble8080Op(buffer, pc);
-	if (ops > 1)
-	    maxops+=(ops-1);
-	pc += ops;
-    }
-#endif
-
-end:
-
-    printf("the end\n");
-
-    // @TODO: what are the heap corruption bugs?
-    // free(buffer);
-    // free(state);
-
-    return 0;
-}
-#endif

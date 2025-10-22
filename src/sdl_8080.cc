@@ -364,7 +364,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 		if (*opcode == 0xDB) // IN
 		{
 			if (app.cpu.debug)
-				Debug(&app.cpu);
+				DebugPrint(&app.cpu);
 			u8 port = opcode[1];
 			app.cpu.a = MachineIN(&app.cpu, port);
 
@@ -380,7 +380,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 		else if (*opcode == 0xD3) // OUT
 		{
 			if (app.cpu.debug)
-				Debug(&app.cpu);
+				DebugPrint(&app.cpu);
 			u8 port = opcode[1];
 			MachineOUT(&app.cpu, port);
 
