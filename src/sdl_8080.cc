@@ -47,7 +47,7 @@ App app;
 
 
 // @see: https://www.computerarcheology.com/Arcade/SpaceInvaders/Hardware.html#inputs
-static u8 InputPorts[8+1] = {
+static u8 InputPorts[8] = {
 // Port 0
 //  bit 0 DIP4 (Seems to be self-test-request read at power up)
 //  bit 1 Always 1
@@ -87,7 +87,7 @@ static u8 InputPorts[8+1] = {
 	0x0,
 };
 
-static u8 OutputPorts[8+1] = {
+static u8 OutputPorts[8] = {
 // Port 2:
 //  bit 0,1,2 Shift amount
 
