@@ -33,6 +33,19 @@ typedef struct {
 
 App app;
 
+// For Input[1] (Port 1)
+#define INSERT_CREDIT 0b00000001
+#define PLAYER_TWO_START 0b00000010
+#define PLAYER_ONE_START 0b00000100
+// For Input[1] and Input[2] (Port 1, Port 2)
+#define PLAYER_SHOOT 0b00010000
+#define PLAYER_LEFT 0b00100000
+#define PLAYER_RIGHT 0b01000000
+
+// Input[2]
+#define TILT 0b00000100
+
+
 // @see: https://www.computerarcheology.com/Arcade/SpaceInvaders/Hardware.html#inputs
 static u8 InputPorts[8+1] = {
 // Port 0
@@ -72,7 +85,6 @@ static u8 InputPorts[8+1] = {
 // Port 3
 //   bit 0-7 Shift register data
 	0x0,
-	// Outputs Ports? what.
 };
 
 static u8 OutputPorts[8+1] = {
@@ -148,37 +160,45 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 			return SDL_APP_SUCCESS;
 		if (e.down)
 		{
+			// deposit CREDIT
 			if (e.key == SDLK_C) {
-				InputPorts[1] |= 1; // deposit CREDIT
+				InputPorts[1] |= INSERT_CREDIT; 
+			}
+
+			// TILT
+			if (e.key == SDLK_T) {
+				InputPorts[2] |= TILT; 
 			}
 
 			// player 1
-			if (e.key == SDLK_S) {
-				InputPorts[1] |= 0b00000100;
+			if (e.key == SDLK_1) {
+				InputPorts[1] |= PLAYER_ONE_START;
 			}
 			if (e.key == SDLK_LEFT) {
-				InputPorts[1] |= 0b00100000;
+				InputPorts[1] |= PLAYER_LEFT;
+				InputPorts[2] |= PLAYER_LEFT;
 			}
 			if (e.key == SDLK_RIGHT) {
-				InputPorts[1] |= 0b01000000;
+				InputPorts[1] |= PLAYER_RIGHT;
+				InputPorts[2] |= PLAYER_RIGHT;
 			}
 			if (e.key == SDLK_UP || e.key == SDLK_SPACE) {
-				InputPorts[1] |= 0b00010000;
+				InputPorts[1] |= PLAYER_SHOOT;
+				InputPorts[2] |= PLAYER_SHOOT;
 			}
 
 			// player 2
-			// @TODO: pick a decent layout? or just use the same...
-			if (e.key == SDLK_E) {
-				InputPorts[1] |= 0b00000010;
+			if (e.key == SDLK_2) {
+				InputPorts[1] |= PLAYER_TWO_START;
 			}
 			if (e.key == SDLK_A) {
-				InputPorts[2] |= 0b00100000;
+				InputPorts[2] |= PLAYER_LEFT;
 			}
 			if (e.key == SDLK_D) {
-				InputPorts[2] |= 0b01000000;
+				InputPorts[2] |= PLAYER_RIGHT;
 			}
 			if (e.key == SDLK_W) {
-				InputPorts[2] |= 0b00010000;
+				InputPorts[2] |= PLAYER_SHOOT;
 			}
 		} 
 
@@ -193,35 +213,41 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 	if (event->type == SDL_EVENT_KEY_UP) {
 		SDL_KeyboardEvent e = event->key;
 		if (e.key == SDLK_C) {
-			InputPorts[1] &= ~1;
+			InputPorts[1] &= ~INSERT_CREDIT;
+		}
+		if (e.key == SDLK_T) {
+			InputPorts[2] &= ~TILT; 
 		}
 
 		// player 1
-		if (e.key == SDLK_S) {
-			InputPorts[1] &= ~0b00000100;
+		if (e.key == SDLK_1) {
+			InputPorts[1] &= ~PLAYER_ONE_START;
 		}
 		if (e.key == SDLK_LEFT) {
-			InputPorts[1] &= ~0b00100000;
+			InputPorts[1] &= ~PLAYER_LEFT;
+			InputPorts[2] &= ~PLAYER_LEFT;
 		}
 		if (e.key == SDLK_RIGHT) {
-			InputPorts[1] &= ~0b01000000;
+			InputPorts[1] &= ~PLAYER_RIGHT;
+			InputPorts[2] &= ~PLAYER_RIGHT;
 		}
 		if (e.key == SDLK_UP || e.key == SDLK_SPACE) {
-			InputPorts[1] &= ~0b00010000;
+			InputPorts[1] &= ~PLAYER_SHOOT;
+			InputPorts[2] &= ~PLAYER_SHOOT;
 		}
 
 		// player 2
-		if (e.key == SDLK_S) {
-			InputPorts[1] &= ~0b00000010;
+		if (e.key == SDLK_2) {
+			InputPorts[1] &= ~PLAYER_TWO_START;
 		}
 		if (e.key == SDLK_A) {
-			InputPorts[2] &= ~0b00100000;
+			InputPorts[2] &= ~PLAYER_LEFT;
 		}
 		if (e.key == SDLK_D) {
-			InputPorts[2] &= ~0b01000000;
+			InputPorts[2] &= ~PLAYER_RIGHT;
 		}
 		if (e.key == SDLK_W) {
-			InputPorts[2] &= ~0b00010000;
+			InputPorts[2] &= ~PLAYER_SHOOT;
 		}
 	}
 
@@ -400,4 +426,3 @@ void RenderScreen()
 void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
 }
-
