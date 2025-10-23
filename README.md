@@ -21,10 +21,14 @@ cd cpu-emulators
 
 ## Controls
 C to insert credit  
-1 & 2 to for Start Player 1 and Start Player 2  
+1 & 2 for Start Player 1 and Start Player 2  
 Left, Right, UP/Spacebar for both players  
 P to Pause  
 T for TILT (historical anticheat for pinball, causes GAME OVER)  
+
+
+D for Debug stepping CPU in terminal on carriage return. Type 'd' then <CR>
+(carriage return, enter) to stop. 'q' to quit.
 
 TODOs:
 - [X] Colors.
