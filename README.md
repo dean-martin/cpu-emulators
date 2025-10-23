@@ -27,7 +27,7 @@ P to Pause
 T for TILT (historical anticheat for pinball, causes GAME OVER)  
 
 
-D for Debug stepping CPU in terminal on carriage return. Type 'd' then <CR>
+D for Debug stepping CPU in terminal on carriage return. In the terminal running the app, type 'd' then <CR>
 (carriage return, enter) to stop. 'q' to quit.
 
 TODOs:
