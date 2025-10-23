@@ -20,10 +20,10 @@ cd cpu-emulators
 ```
 
 ## Controls
-Left, Right, UP/Spacebar for both players
-C to insert credit
-P to Pause
-T for TILT (historical anticheat for pinball, causes GAME OVER)
+Left, Right, UP/Spacebar for both players  
+C to insert credit  
+P to Pause  
+T for TILT (historical anticheat for pinball, causes GAME OVER)  
 
 TODOs:
 - [X] Colors.
