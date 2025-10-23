@@ -20,6 +20,13 @@
 #define SCREEN_HEIGHT 360
 
 typedef struct {
+	Uint8 *PlayerShoot;
+	Uint32 PlayerShootLength;
+} Sounds;
+
+Sounds sounds;
+
+typedef struct {
 	State8080 cpu;
 
 	u8 *video_pixels;
@@ -27,8 +34,11 @@ typedef struct {
 	u16 shift_register;
 	u8 shift_offset;
 
+	bool pause;
+
 	SDL_Window *window;
 	SDL_Renderer *renderer;
+	SDL_AudioStream *stream;
 } App;
 
 App app;
@@ -87,6 +97,8 @@ static u8 InputPorts[8] = {
 	0x0,
 };
 
+#define SOUND_SHOOT 0b00000010
+
 static u8 OutputPorts[8] = {
 // Port 2:
 //  bit 0,1,2 Shift amount
@@ -122,6 +134,11 @@ void RenderScreen();
 /* This function runs once at startup. */
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
+        SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
+        return SDL_APP_FAILURE;
+    }
+
     /* Create the window */
 	if (!SDL_CreateWindowAndRenderer("Space Invaders (1978)", SCREEN_WIDTH, SCREEN_HEIGHT, NULL, &app.window, &app.renderer)) {
         SDL_Log("Couldn't create window and renderer: %s", SDL_GetError());
@@ -168,6 +185,10 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 			// TILT
 			if (e.key == SDLK_T) {
 				InputPorts[2] |= TILT; 
+			}
+
+			if (e.key == SDLK_P) {
+				app.pause = !app.pause;
 			}
 
 			// player 1
@@ -311,7 +332,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	int cycles_to_catch_up = 2 * MillisecondDifference;
 	int cycles = 0;
 
-	while(cycles_to_catch_up > cycles)
+	while(cycles_to_catch_up > cycles && !app.pause)
 	{
 		u8 *opcode = &app.cpu.memory[app.cpu.pc];
 		if (*opcode == 0xDB) // IN

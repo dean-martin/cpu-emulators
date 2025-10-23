@@ -11,11 +11,19 @@ I'm using SDL3 as a vendored git submodule.
 
 ## Building
 - cmake
-- build-essential (probably)
+- build-essential
 
 ```bash
+git clone --recurse-submodules https://github.com/dean-martin/cpu-emulators
+cd cpu-emulators
 ./build.sh && build/sdl_8080
 ```
+
+## Controls
+Left, Right, UP/Spacebar for both players
+C to insert credit
+P to Pause
+T for TILT (historical anticheat for pinball, causes GAME OVER)
 
 TODOs:
 - [X] Colors.
