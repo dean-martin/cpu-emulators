@@ -6,3 +6,4 @@
 build/
 output/
 .vs/
+*.wav

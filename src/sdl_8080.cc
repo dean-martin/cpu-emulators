@@ -20,11 +20,13 @@
 #define SCREEN_HEIGHT 360
 
 typedef struct {
-	Uint8 *PlayerShoot;
-	Uint32 PlayerShootLength;
-} Sounds;
+	Uint8 *data;
+	Uint32 length;
+} sound_t;
 
-Sounds sounds;
+typedef struct {
+	sound_t shoot;
+} Sounds;
 
 typedef struct {
 	State8080 cpu;
@@ -39,6 +41,7 @@ typedef struct {
 	SDL_Window *window;
 	SDL_Renderer *renderer;
 	SDL_AudioStream *stream;
+	Sounds sounds;
 } App;
 
 App app;
@@ -145,7 +148,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         SDL_Log("Couldn't create window and renderer: %s", SDL_GetError());
         return SDL_APP_FAILURE;
     }
-	SDL_RenderSetLogicalSize(app.renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
+	// @TODO: wut
+	// SDL_RenderSetLogicalSize(app.renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
 
 	if (!InitCPU(&app.cpu)) 
 	{
@@ -170,7 +174,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 	char *wav_path = NULL;
     /* Load the .wav file from wherever the app is being run from. */
     SDL_asprintf(&wav_path, "%ssound/shoot.wav", SDL_GetBasePath());  /* allocate a string of the full file path */
-    if (!SDL_LoadWAV(wav_path, &spec, &sounds.PlayerShoot, &sounds.PlayerShootLength)) {
+    if (!SDL_LoadWAV(wav_path, &spec, &app.sounds.shoot.data, &app.sounds.shoot.length)) {
         SDL_Log("Couldn't load .wav file: %s", SDL_GetError());
         return SDL_APP_FAILURE;
     }
@@ -318,12 +322,12 @@ void MachineOUT(State8080 *cpu, u8 port)
 		// @TODO: how to handle sound using a WAV file? The output port is designed that hardware
 		// will keep playing the shoot sound until the bit is cleared. This just repeats it endlessly.
 		// Maybe we can mimic the sound with code?
-		char str[9];
-		SDL_Log("OUT Port[3]: %s", ByteToBinary(OutputPorts[3], str));
+		// char str[9];
+		// SDL_Log("OUT Port[3]: %s", ByteToBinary(OutputPorts[3], str));
 		if (OutputPorts[3] & SOUND_SHOOT) {
-			// SDL_PutAudioStreamData(app.stream, sounds.PlayerShoot, sounds.PlayerShootLength);
+			// SDL_PutAudioStreamData(app.stream, app.sounds.shoot.data, app.sounds.shoot.length);
 			// OutputPorts[3] &= ~SOUND_SHOOT;
-			OutputPorts[3] = 0;
+			// OutputPorts[3] = 0;
 		}
 
 	}
@@ -351,7 +355,10 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	local_persist bool AlternateInterrupt;
 	local_persist Uint64 PreviousNow;
 
-	if (app.cpu.interrupt_enabled && (Now - LastInterruptTime) > 9000) {
+	// The game’s video hardware generates 2 interrupts which we will have to
+	// emulate in software, a end of frame and a middle of frame. Both execute
+	// at 60 Hz (60 times a second). 1/60 of a second is 16.6667 milliseconds. 
+	if (app.cpu.interrupt_enabled && (Now - LastInterruptTime) > 8) {
 		if (AlternateInterrupt) {
 			GenerateInterrupt(&app.cpu, 2); // Interrupt "0x10"
 			RenderScreen();
@@ -368,6 +375,8 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	// @TODO: fix
 	double MillisecondDifference = Now - PreviousNow;
 	int cycles_to_catch_up = 2 * MillisecondDifference;
+	// if (cycles_to_catch_up <= 2)
+	cycles_to_catch_up += 20;
 	int cycles = 0;
 
 	while(cycles_to_catch_up > cycles && !app.pause)
