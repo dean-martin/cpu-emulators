@@ -139,11 +139,13 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         return SDL_APP_FAILURE;
     }
 
+
     /* Create the window */
-	if (!SDL_CreateWindowAndRenderer("Space Invaders (1978)", SCREEN_WIDTH, SCREEN_HEIGHT, NULL, &app.window, &app.renderer)) {
+	if (!SDL_CreateWindowAndRenderer("Space Invaders (1978)", SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE, &app.window, &app.renderer)) {
         SDL_Log("Couldn't create window and renderer: %s", SDL_GetError());
         return SDL_APP_FAILURE;
     }
+	SDL_RenderSetLogicalSize(app.renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
 
 	if (!InitCPU(&app.cpu)) 
 	{
@@ -163,6 +165,27 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         printf("[ERROR] failed to alloc VideoPixels\n");
         exit(1);
     }
+
+    SDL_AudioSpec spec;
+	char *wav_path = NULL;
+    /* Load the .wav file from wherever the app is being run from. */
+    SDL_asprintf(&wav_path, "%ssound/shoot.wav", SDL_GetBasePath());  /* allocate a string of the full file path */
+    if (!SDL_LoadWAV(wav_path, &spec, &sounds.PlayerShoot, &sounds.PlayerShootLength)) {
+        SDL_Log("Couldn't load .wav file: %s", SDL_GetError());
+        return SDL_APP_FAILURE;
+    }
+
+    SDL_free(wav_path);  /* done with this string. */
+
+
+    app.stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
+    if (!app.stream) {
+        SDL_Log("Couldn't create audio stream: %s", SDL_GetError());
+        return SDL_APP_FAILURE;
+    }
+
+    /* SDL_OpenAudioDeviceStream starts the device paused. You have to tell it to start! */
+    SDL_ResumeAudioStreamDevice(app.stream);
 
     return SDL_APP_CONTINUE;
 }
@@ -225,7 +248,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
 		if (e.key == SDLK_D)
 		{
-			// app.cpu.debug = app.cpu.debug ? 0 : 1;
+			app.cpu.debug = app.cpu.debug ? 0 : 1;
 			// SDL_Log("debug print: %d", app.cpu.debug);
 		}
 
@@ -290,7 +313,21 @@ u8 MachineIN(State8080 *cpu, u8 port)
 
 void MachineOUT(State8080 *cpu, u8 port)
 {
-	// if (port != 6) // Watch dog is noisy.
+	// sounds
+	if (port == 3) {
+		// @TODO: how to handle sound using a WAV file? The output port is designed that hardware
+		// will keep playing the shoot sound until the bit is cleared. This just repeats it endlessly.
+		// Maybe we can mimic the sound with code?
+		char str[9];
+		SDL_Log("OUT Port[3]: %s", ByteToBinary(OutputPorts[3], str));
+		if (OutputPorts[3] & SOUND_SHOOT) {
+			// SDL_PutAudioStreamData(app.stream, sounds.PlayerShoot, sounds.PlayerShootLength);
+			// OutputPorts[3] &= ~SOUND_SHOOT;
+			OutputPorts[3] = 0;
+		}
+
+	}
+	// if (port == 3)
 	// 	SDL_Log("OUT: Port: %d", port);
 
 	if (port == 2) {
@@ -307,16 +344,17 @@ void MachineOUT(State8080 *cpu, u8 port)
 /* This function runs once per frame, and is the heart of the program. */
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
-	register clock_t Now = clock();
-	local_persist clock_t LastInterruptTime;
-	local_persist clock_t LastRenderTime;
+	// Get the number of milliseconds that have elapsed since the SDL library
+	// initialization.
+	Uint64 Now = SDL_GetTicks();
+	local_persist Uint64 LastInterruptTime;
 	local_persist bool AlternateInterrupt;
-	local_persist clock_t PreviousNow;
+	local_persist Uint64 PreviousNow;
 
-	// hmmm wallclock is definitely better here. time(NUlL) calls were too expensive.
 	if (app.cpu.interrupt_enabled && (Now - LastInterruptTime) > 9000) {
 		if (AlternateInterrupt) {
 			GenerateInterrupt(&app.cpu, 2); // Interrupt "0x10"
+			RenderScreen();
 			// SDL_Log("Interrupt 0x10");
 		}
 		else {
@@ -324,7 +362,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			// SDL_Log("Interrupt 0x08");
 		}
 		AlternateInterrupt = !AlternateInterrupt;
-		LastInterruptTime = clock();
+		LastInterruptTime = SDL_GetTicks();
 	}
 	
 	// @TODO: fix
@@ -369,11 +407,6 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			cycles += Emulate8080Op(&app.cpu);
 		}
 	}
-
-	if((Now - LastRenderTime) > 9000) {
-		RenderScreen();
-		LastRenderTime = clock();
-    }
 
 	PreviousNow = Now;
 
